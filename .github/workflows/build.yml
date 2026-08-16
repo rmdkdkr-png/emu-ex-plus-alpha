@@ -29,6 +29,12 @@ jobs:
         sudo apt-get install -y --no-install-recommends autoconf automake autopoint bash gcc-arm-linux-gnueabi file gawk gettext git libtool libtool-bin make nasm pkg-config unzip wget
     - name: Install Latest CMake
       uses: lukka/get-cmake@latest
+      with:
+        # imagine/cmake/config.cmake 가 CMAKE_EXPERIMENTAL_CXX_IMPORT_STD 를
+        # 451f2fe2-a8a2-47c3-bc32-94786d8fc91b 로 박아 두었고, 이 UUID는 CMake 4.3 전용이다.
+        # @latest 가 4.4+ 를 깔면 UUID가 안 맞아 `import std` 가 꺼지고,
+        # CXX_MODULE_STD 를 켠 타깃(imagine / emuframework)에서 configure 가 죽는다.
+        cmakeVersion: "~4.3.0"
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
@@ -82,6 +88,12 @@ jobs:
         sudo apt-get install -y --no-install-recommends autoconf automake autopoint bash gcc-arm-linux-gnueabi file gawk gettext git libtool libtool-bin make nasm pkg-config unzip wget
     - name: Install Latest CMake
       uses: lukka/get-cmake@latest
+      with:
+        # imagine/cmake/config.cmake 가 CMAKE_EXPERIMENTAL_CXX_IMPORT_STD 를
+        # 451f2fe2-a8a2-47c3-bc32-94786d8fc91b 로 박아 두었고, 이 UUID는 CMake 4.3 전용이다.
+        # @latest 가 4.4+ 를 깔면 UUID가 안 맞아 `import std` 가 꺼지고,
+        # CXX_MODULE_STD 를 켠 타깃(imagine / emuframework)에서 configure 가 죽는다.
+        cmakeVersion: "~4.3.0"
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
