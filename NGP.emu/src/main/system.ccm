@@ -16,6 +16,7 @@
 module;
 #include <mednafen/mednafen.h>
 #include <ngp/mem.h>
+#include <ss2sp/ss2sp.h>
 
 export module system;
 import emuex;
@@ -38,7 +39,23 @@ export enum class NgpKey: KeyCode
 	Option = 7,
 	A = 5,
 	B = 6,
+	/* ── SS2 원버튼 필살기 트리거 ──────────────────────────────
+	   1~7은 NGP 실기 패드 비트와 1:1이라 건드리면 안 된다(bit(code-1)).
+	   8부터는 실기에 없는 가상 키다 — 패드 바이트로 가지 않고
+	   엔진 트리거 비트로만 쓰인다. */
+	SP1 = 8,
+	SP2 = 9,
+	SP3 = 10,
+	SP4 = 11,
+	SP5 = 12,
+	SP6 = 13,
+	/* A+B 동시입력 = 분노 폭발. 손가락 두 개로 정확히 같은 프레임에 누르기가 어려워서
+	   버튼 하나로 만든다. 엔진과 무관하게 패드 비트 두 개(A 0x10 / B 0x20)를 같이 켤 뿐이다. */
+	AB = 14,
 };
+
+/* 엔진 선언은 ss2sp/ss2sp.h (global module fragment 에서 include) */
+constexpr KeyCode ngpKeySP1 = 8, ngpKeySP6 = 13, ngpKeyAB = 14;
 
 enum NgpConfigKey
 {
@@ -54,6 +71,12 @@ public:
 		.defaultValue = true
 	}> optionNGPLanguage;
 	uint8_t inputBuff{};
+	uint16_t spTrig{};        /* SP1~SP6 눌림 비트 */
+	bool ss2spEnabled{true};  /* 옵션에서 끌 수 있다 */
+	/* .emu 계열은 화면 버튼을 많이 못 얹고 핫키도 빈약하다.
+	   그래서 기본을 **SP 하나 + 방향**으로 둔다 — 브라우저 실행기와 같은 감각.
+	   물리 패드를 쓰면 SP2~SP6 이 기술 1~5번으로 그대로 살아 있다. */
+	bool ss2spLayoutSP{true};
 	MutablePixmapView mSurfacePix;
 	static constexpr WSize vidBufferPx{160, 152};
 	alignas(8) uint32_t pixBuff[vidBufferPx.x * vidBufferPx.y]{};
@@ -67,6 +90,7 @@ public:
 	{
 		Mednafen::MDFNGameInfo = &mdfnGameInfo;
 		mdfnGameInfo.SetInput(0, "gamepad", (uint8*)&inputBuff);
+		ss2sp_set_ram(MDFN_IEN_NGP::CPUExRAM);
 	}
 
 	// required API functions
@@ -84,13 +108,34 @@ public:
 	void clearInputBuffers()
 	{
 		inputBuff = {};
+		spTrig = {};
+		ss2sp_reset();
 		MDFN_IEN_NGP::storeB(0x6F82, 0);
 	}
 
 	void handleInputAction(EmuApp*, InputAction a)
 	{
+		if(a.code == ngpKeyAB)
+		{
+			/* A(비트4) + B(비트5)를 한 번에 */
+			inputBuff = setOrClearBits(inputBuff, uint8_t(bit(4) | bit(5)),
+			                           a.state == Input::Action::PUSHED);
+			if(!ss2spEnabled)
+				MDFN_IEN_NGP::storeB(0x6F82, inputBuff);
+			return;
+		}
+		if(a.code >= ngpKeySP1 && a.code <= ngpKeySP6)
+		{
+			/* 가상 키 — 패드 바이트에 넣지 않는다. 엔진이 프레임마다 읽어 간다. */
+			const uint16_t m = uint16_t(1u << (a.code - ngpKeySP1));
+			if(a.state == Input::Action::PUSHED) spTrig |= m;
+			else                                 spTrig &= uint16_t(~m);
+			return;
+		}
 		inputBuff = setOrClearBits(inputBuff, bit(a.code - 1), a.state == Input::Action::PUSHED);
-		MDFN_IEN_NGP::storeB(0x6F82, inputBuff);
+		/* 엔진이 켜져 있으면 패드는 runFrame 에서 한 번에 쓴다 */
+		if(!ss2spEnabled)
+			MDFN_IEN_NGP::storeB(0x6F82, inputBuff);
 	}
 
 	FrameRate frameRate() const { return ngpFrameRate; }

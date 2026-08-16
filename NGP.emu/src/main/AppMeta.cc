@@ -51,7 +51,21 @@ constexpr auto faceKeyInfo = makeArray<KeyInfo>
 
 constexpr auto turboFaceKeyInfo = turbo(faceKeyInfo);
 
-constexpr auto gpKeyInfo = concatToArrayNow<dpadKeyInfo, optionKeyInfo, faceKeyInfo, turboFaceKeyInfo>;
+/* SS2 원버튼 필살기 — 실기에 없는 가상 키. 화면 버튼으로도 따로 뜬다. */
+constexpr auto spKeyInfo = makeArray<KeyInfo>
+(
+	NgpKey::SP1,
+	NgpKey::SP2,
+	NgpKey::SP3,
+	NgpKey::SP4,
+	NgpKey::SP5,
+	NgpKey::SP6
+);
+
+/* A+B 동시입력(분노 폭발) — 터치로는 두 버튼을 같은 프레임에 누르기가 어렵다 */
+constexpr auto abKeyInfo = makeArray<KeyInfo>(NgpKey::AB);
+
+constexpr auto gpKeyInfo = concatToArrayNow<dpadKeyInfo, optionKeyInfo, faceKeyInfo, turboFaceKeyInfo, spKeyInfo, abKeyInfo>;
 
 std::span<const KeyCategory> AppMeta::keyCategories()
 {
@@ -73,6 +87,13 @@ std::string_view AppMeta::systemKeyCodeToString(KeyCode c)
 		case NgpKey::Option: return "Option";
 		case NgpKey::A: return "A";
 		case NgpKey::B: return "B";
+		case NgpKey::SP1: return "SP 1";
+		case NgpKey::SP2: return "SP 2";
+		case NgpKey::SP3: return "SP 3";
+		case NgpKey::SP4: return "SP 4";
+		case NgpKey::SP5: return "SP 5";
+		case NgpKey::SP6: return "SP 6";
+		case NgpKey::AB: return "A+B";
 		default: return "";
 	}
 }
@@ -90,6 +111,14 @@ std::span<const KeyConfigDesc> AppMeta::defaultKeyConfigs()
 		KeyMapping{NgpKey::Option, Keycode::ENTER},
 		KeyMapping{NgpKey::B, Keycode::Z},
 		KeyMapping{NgpKey::A, Keycode::X},
+		/* SS2 원버튼 — 남는 키에 얹는다 */
+		KeyMapping{NgpKey::SP1, Keycode::A},
+		KeyMapping{NgpKey::SP2, Keycode::S},
+		KeyMapping{NgpKey::SP3, Keycode::D},
+		KeyMapping{NgpKey::SP4, Keycode::F},
+		KeyMapping{NgpKey::SP5, Keycode::Q},
+		KeyMapping{NgpKey::SP6, Keycode::W},
+		KeyMapping{NgpKey::AB, Keycode::C},
 	};
 
 	static constexpr std::array genericGamepadMap
@@ -101,6 +130,14 @@ std::span<const KeyConfigDesc> AppMeta::defaultKeyConfigs()
 		KeyMapping{NgpKey::Option, Keycode::GAME_START},
 		KeyMapping{NgpKey::B, Keycode::GAME_X},
 		KeyMapping{NgpKey::A, Keycode::GAME_A},
+		/* NGPC는 버튼이 셋뿐이라 패드의 나머지가 통째로 논다 — 거기에 필살기를 단다 */
+		KeyMapping{NgpKey::SP1, Keycode::GAME_B},
+		KeyMapping{NgpKey::SP2, Keycode::GAME_Y},
+		KeyMapping{NgpKey::SP3, Keycode::GAME_L1},
+		KeyMapping{NgpKey::SP4, Keycode::GAME_R1},
+		KeyMapping{NgpKey::SP5, Keycode::GAME_L2},
+		KeyMapping{NgpKey::SP6, Keycode::GAME_R2},
+		KeyMapping{NgpKey::AB, Keycode::GAME_SELECT},
 	};
 
 	static constexpr std::array wiimoteMap
@@ -165,6 +202,11 @@ SystemInputDeviceDesc AppMeta::inputDeviceDesc(int idx)
 		InputComponentDesc{"D-Pad", dpadKeyInfo, InputComponent::dPad, LB2DO},
 		InputComponentDesc{"Face Buttons", faceKeyInfo, InputComponent::button, RB2DO},
 		InputComponentDesc{"Option", optionKeyInfo, InputComponent::button, RB2DO},
+		/* 화면에는 SP 하나만 얹는다(방향과 조합해 다 쓴다).
+		   SP2~SP6 은 물리 패드에만 남겨 화면을 어지럽히지 않는다. */
+		InputComponentDesc{"SP Button", {&spKeyInfo[0], 1}, InputComponent::button, RB2DO},
+		InputComponentDesc{"A+B", abKeyInfo, InputComponent::button, RB2DO},
+		InputComponentDesc{"SP Buttons (all 6)", spKeyInfo, InputComponent::button, RB2DO, {.altConfig = true}},
 	};
 	static constexpr SystemInputDeviceDesc gamepadDesc{"Gamepad", gamepadComponents};
 	return gamepadDesc;

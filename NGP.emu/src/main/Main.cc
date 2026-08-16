@@ -15,6 +15,7 @@
 
 module;
 #include <mednafen/mednafen.h>
+#include <ss2sp/ss2sp.h>
 #include <mednafen/state-driver.h>
 #include <mednafen/MemoryStream.h>
 #include <ngp/neopop.h>
@@ -105,6 +106,15 @@ void NgpSystem::configAudioRate(FrameRate outputFrameRate, int outputRate)
 void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
 {
 	static constexpr size_t maxAudioFrames = 48000 / AppMeta::minFrameRate;
+	/* ── SS2 원버튼 엔진 ────────────────────────────────────────
+	   NGP.emu 는 Emulate() 안의 storeB(0x6F82, *chee) 가 주석 처리돼 있고
+	   입력 이벤트 때 직접 쓴다. 그래서 프레임 직전에 여기서 한 번 덮어쓰면
+	   엔진이 만든 커맨드가 그대로 게임에 들어간다. */
+	if(ss2spEnabled)
+	{
+		ss2sp_set_layout(ss2spLayoutSP);
+		MDFN_IEN_NGP::storeB(0x6F82, ss2sp_frame(inputBuff, spTrig));
+	}
 	EmuEx::runFrame(*this, mdfnGameInfo, taskCtx, video, mSurfacePix, audio, maxAudioFrames);
 }
 
