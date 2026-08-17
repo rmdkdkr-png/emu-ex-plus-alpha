@@ -37,7 +37,8 @@ constexpr const char *ss2SlotName[]
 	"SP", "→ SP", "← SP", "↓ SP", "↘ SP", "↙ SP", "Air SP"
 };
 
-/* 유파 id("hanzo_bst") → 보기 좋은 이름("하조 · 수라") */
+/* 유파 id("hanzo_bst") → 보기 좋은 이름("한조 · 나찰")
+   유파는 브라우저 실행기와 같은 표기: _s = 수라(베기), _bst = 나찰(힘) */
 static std::string ss2StyleLabel(int style)
 {
 	struct Name { std::string_view id, ko; };
@@ -45,7 +46,7 @@ static std::string ss2StyleLabel(int style)
 	{
 		{"kazuki", "카즈키"},   {"sogetsu", "소게츠"},  {"haohmaru", "하오마루"},
 		{"genjuro", "겐주로"},  {"nakoruru", "나코루루"},{"rimururu", "리무루루"},
-		{"hanzo", "하조"},      {"galford", "갈포드"},  {"asura", "아수라"},
+		{"hanzo", "한조"},      {"galford", "갈포드"},  {"asura", "아수라"},
 		{"charlotte", "샤를로트"},{"morozumi", "모로즈미"},{"ukyo", "우쿄"},
 		{"jubei", "쥬베이"},    {"shiki", "시키"},      {"yuga", "유가"},
 	};
@@ -60,7 +61,7 @@ static std::string ss2StyleLabel(int style)
 	}
 	std::string out{ko};
 	out += " · ";
-	out += (suf == "bst") ? "수라" : "참";
+	out += (suf == "bst") ? "나찰" : "수라";
 	return out;
 }
 

@@ -77,6 +77,12 @@ static int       pending_left;
 static uint32_t  frame_no;        /* 엔진 프레임 카운터 */
 static uint32_t  horiz_at;        /* 순수 좌/우(아래 없음)를 마지막으로 잡고 있던 프레임 */
 
+/* 비오의 — 유파를 가리지 않고 ←→↓+A 하나다. 그래서 기술표에 넣지 않고 여기 둔다.
+   분노 MAX 일 때만 나가는 기술이라 방향 조합에 끼워 두면 평소엔 죽은 자리가 된다.
+   모션 바이트는 패드 비트다: 4=LEFT(0x4) 6=RIGHT(0x8) 2=DOWN(0x2). */
+static const unsigned char mo_super[] = { 0x4, 0x8, 0x2 };
+static const ss2_move ss2_super = { "비오의", mo_super, 3, 16, 0 };
+
 /* 마지막 실행 결과 (프론트엔드 로그/디버그용) */
 const char *ss2sp_last_name = 0;
 int         ss2sp_last_ok   = -1;   /* -1 미판정 · 0 불발 · 1 발동 */
@@ -276,13 +282,16 @@ uint8_t ss2sp_frame(uint8_t pad, uint16_t trig)
          for (b = 0; b < 9; b++) if (edge & (1u << b)) { slot = b; break; }
          hold_bit = (uint16_t)(slot >= 0 ? (1u << slot) : 0);   /* 이 버튼을 잡고 있으면 강 */
 
-         if (ss2_sp_layout() && slot == 0)
-            m = ss2_resolve_sp(st, ss2_cur_idx, pad);   /* X = SP 버튼 */
-         else
-         {
-            if (ss2_sp_layout()) slot--;                /* Y·L·R·L2·R2 = 1~5번 */
-            if (slot >= 0 && slot < st->n) m = &st->mv[slot];
-         }
+         /* 버튼 번호는 레이아웃과 무관하게 고정이다: SP1~SP7 = 기술 1~7번, SP8 = 비오의.
+            SP 레이아웃일 때만 SP1 이 방향을 함께 읽는데, 방향을 안 잡으면 중립 자리가
+            나오고 중립 자리는 항상 기술 1번이라 결과가 같다. 그래서 어긋나지 않는다.
+            (예전에는 SP 레이아웃에서 번호가 한 칸씩 밀려 SP2 가 기술 1번이었다) */
+         if (slot == 7)
+            m = &ss2_super;
+         else if (ss2_sp_layout() && slot == 0)
+            m = ss2_resolve_sp(st, ss2_cur_idx, pad);   /* SP1 = SP + 방향 */
+         else if (slot >= 0 && slot < st->n)
+            m = &st->mv[slot];
 
          if (m)
          {

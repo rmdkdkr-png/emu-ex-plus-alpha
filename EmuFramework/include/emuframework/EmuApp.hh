@@ -102,6 +102,7 @@ public:
 		SYSTEM_OPTIONS,
 		FILE_PATH_OPTIONS,
 		GUI_OPTIONS,
+		CUSTOM_1,   /* 앱이 자유롭게 쓰는 화면. NGP.emu SS2 에서는 기술 배치 */
 	};
 
 	EmuApp(ApplicationInitParams, ApplicationContext &);

@@ -96,7 +96,7 @@ std::string_view AppMeta::systemKeyCodeToString(KeyCode c)
 		case NgpKey::SP5: return "SP 5";
 		case NgpKey::SP6: return "SP 6";
 		case NgpKey::SP7: return "SP 7";
-		case NgpKey::SP8: return "SP 8";
+		case NgpKey::SP8: return "SP 8 (Super)";
 		case NgpKey::AB: return "A+B";
 		default: return "";
 	}
