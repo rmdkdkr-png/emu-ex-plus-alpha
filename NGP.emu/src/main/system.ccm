@@ -60,9 +60,14 @@ export enum class NgpKey: KeyCode
 
 /* 엔진 선언은 ss2sp/ss2sp.h (global module fragment 에서 include) */
 
+/* 기술 배치 저장 형식 — 유파 30 × 슬롯 7 = 210바이트. ss2sp_slots_size() 와 같아야 한다. */
+export using Ss2SlotBlob = std::array<uint8_t, 210>;
+
 enum NgpConfigKey
 {
 	CFGKEY_NGPKEY_LANGUAGE = 269, CFGKEY_NO_MD5_FILENAMES = 270,
+	/* SS2 원버튼 */
+	CFGKEY_SS2SP_SLOTS = 271, CFGKEY_SS2SP_ENABLED = 272, CFGKEY_SS2SP_LAYOUT = 273,
 };
 
 export class NgpSystem final: public EmuSystem

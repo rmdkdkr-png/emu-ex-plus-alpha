@@ -24,6 +24,26 @@ void ss2sp_set_layout(int sp);
 /* 부팅 때 한 번. SYSTEM_RAM(16KB) 시작 주소를 넘긴다. */
 void ss2sp_set_ram(void *ram);
 
+
+/* ── 기술 배치 커스텀 ────────────────────────────────────────────
+   유파 30개 × 슬롯 7개(중립·앞·뒤·아래·↘·↙·공중). 값은 기술 번호, -1 = 없음.
+   저장은 ss2sp_slots_blob() 210바이트를 그대로 설정 파일에 넣으면 된다. */
+int  ss2sp_style_count(void);
+int  ss2sp_slot_count(void);
+int  ss2sp_slots_size(void);
+const char *ss2sp_style_id(int style);
+int  ss2sp_cur_style(void);              /* 전투 중이 아니면 -1 */
+int  ss2sp_move_count(int style);
+const char *ss2sp_move_name(int style, int i);
+int  ss2sp_move_btn(int style, int i);   /* 16 = A(약베기), 32 = B(강베기) */
+int  ss2sp_move_flags(int style, int i); /* 1근접 2카드 4공중 8미검증 16잡기 */
+int  ss2sp_move_notation(int style, int i, char *out, int cap);  /* "236+A" */
+int  ss2sp_get_slot(int style, int slot);
+void ss2sp_set_slot(int style, int slot, int mv);
+void ss2sp_reset_slots(void);
+void ss2sp_slots_blob(unsigned char *out);
+void ss2sp_load_slots(const unsigned char *in);
+
 #ifdef __cplusplus
 }
 #endif

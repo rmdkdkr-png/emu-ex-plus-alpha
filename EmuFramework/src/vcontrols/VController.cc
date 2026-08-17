@@ -97,6 +97,8 @@ static void updateTexture(const EmuApp &app, VControllerElement &e, Gfx::Rendere
 						case softReset:
 						case hardReset:
 						case resetMenu: return app.asset(AssetID::arrow);
+						case openTouchConfig: return app.asset(AssetID::display);
+						case openCustomView1: return app.asset(AssetID::speed);
 					}
 					return app.asset(AssetID::more);
 				}());
@@ -956,6 +958,12 @@ std::vector<VControllerElement> VController::defaultUIGroups() const
 {
 	std::vector<VControllerElement> uiElements;
 	add(uiElements, rightUIComponents);
+	/* SS2 개조판: 세이브·로드·리셋·화면버튼설정을 기본 배치에 넣는다.
+	   원본은 메뉴 버튼 하나뿐이라 매번 메뉴를 거쳐야 했다. */
+	add(uiElements, stateUIComponents);
+	add(uiElements, resetUIComponents);
+	add(uiElements, touchCfgUIComponents);
+	add(uiElements, custom1UIComponents);
 	if(Config::Input::TOUCH_DEVICES)
 		add(uiElements, leftUIComponents);
 	if(hasWindow())

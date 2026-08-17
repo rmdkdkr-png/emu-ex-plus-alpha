@@ -14,6 +14,7 @@
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <emuframework/EmuInput.hh>
+#include <emuframework/TouchConfigView.hh>
 #include <emuframework/EmuApp.hh>
 #include <emuframework/AppKeyCode.hh>
 #include <emuframework/FilePicker.hh>
@@ -147,6 +148,27 @@ bool InputManager::handleAppActionKeyInput(EmuApp& app, InputAction action, cons
 			viewController.inputView.toggleAltSpeedMode(AltSpeedMode::fast);
 		}
 		break;
+		case openCustomView1:
+		{
+			if(!isPushed)
+				break;
+			auto v = app.makeView(app.attachParams(), EmuApp::ViewID::CUSTOM_1);
+			if(!v)
+				break;
+			viewController.popToRoot();
+			viewController.pushAndShow(std::move(v), srcEvent, true);
+			return true;
+		}
+		case openTouchConfig:
+		{
+			if(!isPushed)
+				break;
+			log.info("show touch config view from key event");
+			viewController.popToRoot();
+			viewController.pushAndShow(std::make_unique<TouchConfigView>(app.attachParams(),
+				app.defaultVController()), srcEvent, true);
+			return true;
+		}
 		case openMenu:
 		{
 			if(!isPushed)
@@ -668,6 +690,8 @@ std::string_view toString(AppKeyCode code)
 		case AppKeyCode::slowMotion: return "Slow-motion";
 		case AppKeyCode::toggleSlowMotion: return "Toggle Slow-motion";
 		case AppKeyCode::rewind: return "Rewind One State";
+		case AppKeyCode::openTouchConfig: return "On-screen Setup";
+		case AppKeyCode::openCustomView1: return "Move Assignment";
 		case AppKeyCode::softReset: return "Soft Reset";
 		case AppKeyCode::hardReset: return "Hard Reset";
 		case AppKeyCode::resetMenu: return "Open Reset Menu";

@@ -16,6 +16,7 @@
 module;
 #include <mednafen/mednafen.h>
 #include <mednafen/general.h>
+#include <ss2sp/ss2sp.h>
 
 module system;
 
@@ -30,6 +31,10 @@ bool NgpSystem::readConfig(ConfigType type, MapIO &io, unsigned key)
 		{
 			case CFGKEY_NGPKEY_LANGUAGE: return readOptionValue(io, optionNGPLanguage);
 			case CFGKEY_NO_MD5_FILENAMES: return readOptionValue(io, noMD5InFilenames);
+			case CFGKEY_SS2SP_ENABLED: return readOptionValue(io, ss2spEnabled);
+			case CFGKEY_SS2SP_LAYOUT: return readOptionValue(io, ss2spLayoutSP);
+			case CFGKEY_SS2SP_SLOTS:
+				return readOptionValue<Ss2SlotBlob>(io, [](Ss2SlotBlob v){ ss2sp_load_slots(v.data()); });
 		}
 	}
 	return false;
@@ -41,6 +46,18 @@ void NgpSystem::writeConfig(ConfigType type, FileIO &io)
 	{
 		writeOptionValueIfNotDefault(io, optionNGPLanguage);
 		writeOptionValueIfNotDefault(io, CFGKEY_NO_MD5_FILENAMES, noMD5InFilenames, false);
+		writeOptionValueIfNotDefault(io, CFGKEY_SS2SP_ENABLED, ss2spEnabled, true);
+		writeOptionValueIfNotDefault(io, CFGKEY_SS2SP_LAYOUT, ss2spLayoutSP, true);
+		{
+			/* 기술 배치 210바이트. 기본값과 같으면 안 쓴다. */
+			Ss2SlotBlob cur{}, def{};
+			ss2sp_slots_blob(cur.data());
+			ss2sp_reset_slots();
+			ss2sp_slots_blob(def.data());
+			ss2sp_load_slots(cur.data());
+			if(cur != def)
+				writeOptionValue(io, CFGKEY_SS2SP_SLOTS, cur);
+		}
 	}
 }
 

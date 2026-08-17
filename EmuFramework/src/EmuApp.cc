@@ -1370,7 +1370,7 @@ std::unique_ptr<View> EmuApp::makeView(ViewAttachParams attach, ViewID id)
 		case ViewID::SYSTEM_OPTIONS: return std::make_unique<SystemOptionView>(attach);
 		case ViewID::FILE_PATH_OPTIONS: return std::make_unique<FilePathOptionView>(attach);
 		case ViewID::GUI_OPTIONS: return std::make_unique<GUIOptionView>(attach);
-		default: unreachable();
+		default: return {};   /* CUSTOM_1 등 — 앱이 안 만들면 아무 것도 안 뜬다 */
 	}
 }
 

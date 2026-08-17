@@ -50,6 +50,8 @@ enum class AppKeyCode : KeyCode
 	hardReset,
 	resetMenu,
 	closeContent,
+	openTouchConfig,   /* 화면 버튼 설정으로 바로 가기 (SS2 개조판 추가) */
+	openCustomView1,   /* 앱별 화면 — NGP.emu SS2 에서는 기술 배치 */
 };
 
 inline constexpr struct AppKeys
@@ -73,7 +75,9 @@ inline constexpr struct AppKeys
 	softReset = KeyInfo::appKey(AppKeyCode::softReset),
 	hardReset = KeyInfo::appKey(AppKeyCode::hardReset),
 	resetMenu = KeyInfo::appKey(AppKeyCode::resetMenu),
-	exitApp = KeyInfo::appKey(AppKeyCode::exitApp);
+	exitApp = KeyInfo::appKey(AppKeyCode::exitApp),
+	openTouchConfig = KeyInfo::appKey(AppKeyCode::openTouchConfig),
+	openCustomView1 = KeyInfo::appKey(AppKeyCode::openCustomView1);
 
 	constexpr const KeyInfo *data() const { return &openMenu; }
 	static constexpr size_t size() { return sizeof(AppKeys) / sizeof(KeyInfo); }
@@ -112,10 +116,18 @@ inline constexpr std::array genericKeyboardAppKeyCodeMap
 };
 
 inline constexpr std::array rightUIKeys{appKeys.openMenu};
+inline constexpr std::array stateUIKeys{appKeys.saveState, appKeys.loadState};
+inline constexpr std::array resetUIKeys{appKeys.resetMenu};
+inline constexpr std::array touchCfgUIKeys{appKeys.openTouchConfig};
+inline constexpr std::array custom1UIKeys{appKeys.openCustomView1};
 inline constexpr std::array leftUIKeys{appKeys.toggleFastForward, appKeys.rewind};
 
 inline constexpr InputComponentDesc rightUIComponents{"Open Menu", rightUIKeys, InputComponent::ui, RT2DO};
 inline constexpr InputComponentDesc leftUIComponents{"Fast-forward/Rewind", leftUIKeys, InputComponent::ui, LT2DO};
+inline constexpr InputComponentDesc stateUIComponents{"Save/Load State", stateUIKeys, InputComponent::ui, RT2DO};
+inline constexpr InputComponentDesc resetUIComponents{"Reset", resetUIKeys, InputComponent::ui, RT2DO};
+inline constexpr InputComponentDesc touchCfgUIComponents{"On-screen Setup", touchCfgUIKeys, InputComponent::ui, RT2DO};
+inline constexpr InputComponentDesc custom1UIComponents{"Move Assignment", custom1UIKeys, InputComponent::ui, RT2DO};
 
 std::string_view toString(AppKeyCode);
 

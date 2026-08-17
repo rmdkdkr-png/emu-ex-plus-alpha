@@ -184,9 +184,11 @@ static void ss2_compile(const ss2_move *m)
    브라우저판 resolveSpSlot과 같은 우선순위:
      실제 공중 > ↑(공중기 의도) > ↘/↙ > 아래 > 앞/뒤 > 중립
    앞/뒤는 캐릭터가 보는 방향 기준으로 계산한다(좌우 자동 반전). */
+static const signed char *ss2_slots_row(int style);
+
 static const ss2_move *ss2_resolve_sp(const ss2_style *st, unsigned idx, uint8_t held)
 {
-   const signed char *map = ss2_spmap[idx];
+   const signed char *map = ss2_slots_row((int)idx);
    int facing_left = (CPUExRAM[OFF_FACING] == 1);
    int airborne = (CPUExRAM[OFF_Y] != 128);
    int u = !!(held & PAD_UP),  d = !!(held & PAD_DOWN);
@@ -306,6 +308,157 @@ uint8_t ss2sp_frame(uint8_t pad, uint16_t trig)
       return ss2_step_out(hold_bit && (trig & hold_bit));
 
    return pad;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   기술 배치 커스텀 API
+   ss2_spmap(자동 생성 기본값)을 통째로 복사해 두고, 사용자가 고친 값을 여기에 담는다.
+   프론트엔드(NGP.emu 메뉴)가 읽고 쓴다. 저장은 blob 210바이트.
+   ═══════════════════════════════════════════════════════════════════ */
+#define SS2_SLOTS 7
+static signed char ss2_slot_tbl[SS2_STYLE_COUNT][SS2_SLOTS];
+static int         ss2_slot_ready;
+
+static void ss2_slots_ensure(void)
+{
+   if (!ss2_slot_ready)
+   {
+      memcpy(ss2_slot_tbl, ss2_spmap, sizeof ss2_slot_tbl);
+      ss2_slot_ready = 1;
+   }
+}
+
+static const signed char *ss2_slots_row(int style)
+{
+   ss2_slots_ensure();
+   if (style < 0 || style >= SS2_STYLE_COUNT) style = 0;
+   return ss2_slot_tbl[style];
+}
+
+int ss2sp_style_count(void) { return SS2_STYLE_COUNT; }
+int ss2sp_slot_count(void)  { return SS2_SLOTS; }
+int ss2sp_slots_size(void)  { return SS2_STYLE_COUNT * SS2_SLOTS; }
+
+const char *ss2sp_style_id(int style)
+{
+   if (style < 0 || style >= SS2_STYLE_COUNT) return "";
+   return ss2_styles[style].id;
+}
+
+/* 현재 유파. 전투 중이 아니면 -1 */
+int ss2sp_cur_style(void)
+{
+   unsigned v;
+   if (!CPUExRAM) return -1;
+   v = CPUExRAM[OFF_CHARSTYLE];
+   if (v & 7) return -1;
+   v >>= 3;
+   return (v < SS2_STYLE_COUNT) ? (int)v : -1;
+}
+
+int ss2sp_move_count(int style)
+{
+   if (style < 0 || style >= SS2_STYLE_COUNT) return 0;
+   return ss2_styles[style].n;
+}
+
+const char *ss2sp_move_name(int style, int i)
+{
+   if (style < 0 || style >= SS2_STYLE_COUNT) return "";
+   if (i < 0 || i >= ss2_styles[style].n) return "";
+   return ss2_styles[style].mv[i].name;
+}
+
+int ss2sp_move_btn(int style, int i)
+{
+   if (style < 0 || style >= SS2_STYLE_COUNT) return 0;
+   if (i < 0 || i >= ss2_styles[style].n) return 0;
+   return ss2_styles[style].mv[i].btn;
+}
+
+int ss2sp_move_flags(int style, int i)
+{
+   if (style < 0 || style >= SS2_STYLE_COUNT) return 0;
+   if (i < 0 || i >= ss2_styles[style].n) return 0;
+   return ss2_styles[style].mv[i].flags;
+}
+
+/* 커맨드를 넘패드 표기(236 / 623 / 41236 …)로 써 준다. 반환값 = 쓴 글자 수 */
+int ss2sp_move_notation(int style, int i, char *out, int cap)
+{
+   static const struct { unsigned char pad; char ch; } tab[] = {
+      {PAD_UP,'8'}, {PAD_DOWN,'2'}, {PAD_LEFT,'4'}, {PAD_RIGHT,'6'},
+      {PAD_UP|PAD_RIGHT,'9'}, {PAD_UP|PAD_LEFT,'7'},
+      {PAD_DOWN|PAD_RIGHT,'3'}, {PAD_DOWN|PAD_LEFT,'1'},
+   };
+   int k, j, n = 0;
+   const ss2_move *m;
+   if (!out || cap <= 0) return 0;
+   out[0] = 0;
+   if (style < 0 || style >= SS2_STYLE_COUNT) return 0;
+   if (i < 0 || i >= ss2_styles[style].n) return 0;
+   m = &ss2_styles[style].mv[i];
+   for (k = 0; k < m->len && n < cap - 3; k++)
+   {
+      char c = '5';
+      for (j = 0; j < (int)(sizeof tab / sizeof tab[0]); j++)
+         if (tab[j].pad == m->motion[k]) { c = tab[j].ch; break; }
+      out[n++] = c;
+   }
+   if (n < cap - 2) { out[n++] = '+'; out[n++] = (m->btn == 32) ? 'B' : 'A'; }
+   out[n] = 0;
+   return n;
+}
+
+int ss2sp_get_slot(int style, int slot)
+{
+   ss2_slots_ensure();
+   if (style < 0 || style >= SS2_STYLE_COUNT) return -1;
+   if (slot  < 0 || slot  >= SS2_SLOTS)       return -1;
+   return ss2_slot_tbl[style][slot];
+}
+
+void ss2sp_set_slot(int style, int slot, int mv)
+{
+   ss2_slots_ensure();
+   if (style < 0 || style >= SS2_STYLE_COUNT) return;
+   if (slot  < 0 || slot  >= SS2_SLOTS)       return;
+   if (mv >= ss2_styles[style].n) mv = -1;
+   if (mv < 0) mv = -1;
+   ss2_slot_tbl[style][slot] = (signed char)mv;
+}
+
+void ss2sp_reset_slots(void)
+{
+   memcpy(ss2_slot_tbl, ss2_spmap, sizeof ss2_slot_tbl);
+   ss2_slot_ready = 1;
+}
+
+/* 저장/복원 — 0xFF = 없음(-1) */
+void ss2sp_slots_blob(unsigned char *out)
+{
+   int s, k;
+   ss2_slots_ensure();
+   if (!out) return;
+   for (s = 0; s < SS2_STYLE_COUNT; s++)
+      for (k = 0; k < SS2_SLOTS; k++)
+         *out++ = (unsigned char)(ss2_slot_tbl[s][k] < 0 ? 0xFF : ss2_slot_tbl[s][k]);
+}
+
+void ss2sp_load_slots(const unsigned char *in)
+{
+   int s, k;
+   if (!in) return;
+   ss2_slots_ensure();
+   for (s = 0; s < SS2_STYLE_COUNT; s++)
+      for (k = 0; k < SS2_SLOTS; k++)
+      {
+         unsigned char v = *in++;
+         int mv = (v == 0xFF) ? -1 : (int)v;
+         if (mv >= ss2_styles[s].n) mv = -1;
+         ss2_slot_tbl[s][k] = (signed char)mv;
+      }
 }
 
 void ss2sp_reset(void)
