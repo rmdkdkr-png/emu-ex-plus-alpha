@@ -55,7 +55,6 @@ export enum class NgpKey: KeyCode
 };
 
 /* 엔진 선언은 ss2sp/ss2sp.h (global module fragment 에서 include) */
-constexpr KeyCode ngpKeySP1 = 8, ngpKeySP6 = 13, ngpKeyAB = 14;
 
 enum NgpConfigKey
 {
@@ -115,7 +114,7 @@ public:
 
 	void handleInputAction(EmuApp*, InputAction a)
 	{
-		if(a.code == ngpKeyAB)
+		if(a.code == KeyCode(NgpKey::AB))
 		{
 			/* A(비트4) + B(비트5)를 한 번에 */
 			inputBuff = setOrClearBits(inputBuff, uint8_t(bit(4) | bit(5)),
@@ -124,10 +123,10 @@ public:
 				MDFN_IEN_NGP::storeB(0x6F82, inputBuff);
 			return;
 		}
-		if(a.code >= ngpKeySP1 && a.code <= ngpKeySP6)
+		if(a.code >= KeyCode(NgpKey::SP1) && a.code <= KeyCode(NgpKey::SP6))
 		{
 			/* 가상 키 — 패드 바이트에 넣지 않는다. 엔진이 프레임마다 읽어 간다. */
-			const uint16_t m = uint16_t(1u << (a.code - ngpKeySP1));
+			const uint16_t m = uint16_t(1u << (a.code - KeyCode(NgpKey::SP1)));
 			if(a.state == Input::Action::PUSHED) spTrig |= m;
 			else                                 spTrig &= uint16_t(~m);
 			return;

@@ -19,9 +19,9 @@ module;
 #include <mednafen/state-driver.h>
 #include <mednafen/MemoryStream.h>
 #include <ngp/neopop.h>
+#include <ngp/mem.h>   /* storeB() — 원본 Main.cc 는 안 쓰던 헤더다. 엔진이 패드 바이트를 직접 쓰므로 필요. */
 #include <ngp/flash.h>
 #include <ngp/sound.h>
-#include <ngp/mem.h>
 
 module system;
 
