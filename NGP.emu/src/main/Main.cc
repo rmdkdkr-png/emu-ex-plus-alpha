@@ -21,6 +21,7 @@ module;
 #include <ngp/neopop.h>
 #include <ngp/flash.h>
 #include <ngp/sound.h>
+#include <ngp/mem.h>
 
 module system;
 
