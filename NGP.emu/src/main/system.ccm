@@ -43,15 +43,19 @@ export enum class NgpKey: KeyCode
 	   1~7은 NGP 실기 패드 비트와 1:1이라 건드리면 안 된다(bit(code-1)).
 	   8부터는 실기에 없는 가상 키다 — 패드 바이트로 가지 않고
 	   엔진 트리거 비트로만 쓰인다. */
+	/* 엔진(ss2sp_frame)은 트리거 비트를 9개까지 읽는다. 한 유파의 최대 기술 수가 8개라
+	   SP1~SP8 이면 버튼 직결로 전부 닿는다. 전용 비오의 버튼을 따로 두지 않는 이유. */
 	SP1 = 8,
 	SP2 = 9,
 	SP3 = 10,
 	SP4 = 11,
 	SP5 = 12,
 	SP6 = 13,
+	SP7 = 14,
+	SP8 = 15,
 	/* A+B 동시입력 = 분노 폭발. 손가락 두 개로 정확히 같은 프레임에 누르기가 어려워서
 	   버튼 하나로 만든다. 엔진과 무관하게 패드 비트 두 개(A 0x10 / B 0x20)를 같이 켤 뿐이다. */
-	AB = 14,
+	AB = 16,
 };
 
 /* 엔진 선언은 ss2sp/ss2sp.h (global module fragment 에서 include) */
@@ -65,9 +69,11 @@ export class NgpSystem final: public EmuSystem
 {
 public:
 	Mednafen::MDFNGI mdfnGameInfo{EmulatedNGP};
+	/* false = Japanese, true = English (ngp.language: japanese=0 / english=1).
+	   한글 패치본은 일본어 자리에 들어가므로 기본값을 Japanese 로 둔다. */
 	Property<bool, CFGKEY_NGPKEY_LANGUAGE,
 	{
-		.defaultValue = true
+		.defaultValue = false
 	}> optionNGPLanguage;
 	uint8_t inputBuff{};
 	uint16_t spTrig{};        /* SP1~SP6 눌림 비트 */
@@ -123,7 +129,7 @@ public:
 				MDFN_IEN_NGP::storeB(0x6F82, inputBuff);
 			return;
 		}
-		if(a.code >= KeyCode(NgpKey::SP1) && a.code <= KeyCode(NgpKey::SP6))
+		if(a.code >= KeyCode(NgpKey::SP1) && a.code <= KeyCode(NgpKey::SP8))
 		{
 			/* 가상 키 — 패드 바이트에 넣지 않는다. 엔진이 프레임마다 읽어 간다. */
 			const uint16_t m = uint16_t(1u << (a.code - KeyCode(NgpKey::SP1)));
