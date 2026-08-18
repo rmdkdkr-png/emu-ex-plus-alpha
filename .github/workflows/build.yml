@@ -234,6 +234,7 @@ jobs:
           zip "../dist/${file_name//-${COMMIT_PREFIX}/}.zip" "${file_name}.apk"
         done
         zip -r "../dist/EX-Emulators.zip" *.apk
+        cp NgpEmu-*.apk ../dist/NgpEmu.apk
     - name: Update Git Tag
       run: |
         git tag -f Pre-release
@@ -247,4 +248,4 @@ jobs:
         removeArtifacts: true
         replacesArtifacts: false
         tag: Pre-release
-        artifacts: "dist/*.zip"
+        artifacts: "dist/*.zip,dist/*.apk"
