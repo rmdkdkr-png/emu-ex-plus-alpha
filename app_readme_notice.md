@@ -12,7 +12,9 @@ GPL-3.0 §5(a)의 변경 고지 + 소스 안내를 겸합니다.
 > 라이선스는 원본과 같은 **GPL-3.0**이며 전문은 `COPYING` 에 있습니다.
 >
 > **변경 내용** (2026년):
-> - `NGP.emu/src/ss2sp/` — 엔진 신규 (`ss2sp.c` · `ss2sp.h` · `ss2sp_moves.h`)
+> - `NGP.emu/src/ss2sp/` — 원버튼 엔진 신규 (`ss2sp.c` · `ss2sp.h` · `ss2sp_moves.h`)
+> - `NGP.emu/src/ss2comm/` — 캐릭터 해설 엔진 신규 (`ss2comm.c` · `ss2comm.h` · `ss2comm_font.h`)
+>   글리프는 갈무리 글꼴(SIL Open Font License 1.1)에서 필요한 글자만 옮긴 것입니다
 > - `NGP.emu/src/main/` — 엔진 연결, [기술 배치] 메뉴, 기본 화면 버튼(세이브·로드·리셋·터치설정·기술배치)
 > - `EmuFramework/` — 커스텀 뷰 ID 추가 등 위 기능에 필요한 최소 수정
 > - 앱 이름·패키지 ID 변경 (`com.rmdkdkr.ngpemu.ss2`) — 스토어판 NGP.emu와 나란히 설치됩니다

@@ -1,0 +1,274 @@
+diff -ruN a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt	2026-08-20 05:06:07.589132297 +0000
++++ b/src/CMakeLists.txt	2026-08-20 05:06:07.590914920 +0000
+@@ -7,6 +7,9 @@
+ # set_source_files_properties 는 이 빌드에서 먹지 않았다(정의가 컴파일 줄에 안 붙음).
+ # 타깃 전체 정의로 건다 — 이 매크로를 보는 파일은 ss2sp.c 하나뿐이라 부작용이 없다.
+ target_sources(ngpemu PRIVATE ss2sp/ss2sp.c)
++# SS2 캐릭터 해설 엔진 (순수 C, 램 포인터 주입은 위와 같은 매크로를 쓴다).
++# 브라우저판 runner.html 의 commStep() / 코어판 ss2comm.c 와 같은 소스다.
++target_sources(ngpemu PRIVATE ss2comm/ss2comm.c)
+ target_compile_definitions(ngpemu PRIVATE SS2SP_RAM_POINTER)
+ 
+ target_sources(ngpemu PRIVATE
+diff -ruN a/src/main/AppMeta.cc b/src/main/AppMeta.cc
+--- a/src/main/AppMeta.cc	2026-08-20 05:06:07.633927785 +0000
++++ b/src/main/AppMeta.cc	2026-08-20 05:06:07.635914566 +0000
+@@ -51,20 +51,16 @@
+ 
+ constexpr auto turboFaceKeyInfo = turbo(faceKeyInfo);
+ 
+-/* SS2 원버튼 필살기 — 실기에 없는 가상 키. 화면 버튼으로도 따로 뜬다. */
++/* SS2 원버튼 필살기 — 실기에 없는 가상 키. 화면 버튼으로도 따로 뜬다.
++   v0.5: 버튼을 A·B·A+B·SP 넷으로 줄였다. 기술은 전부 SP+방향(기술 배치)으로 나가고,
++   비오의는 뒤+A+B 다. SP2~SP8 은 키 목록에서 뺐다(옛 설정이 남아 있어도 엔진이 무시한다). */
+ constexpr auto spKeyInfo = makeArray<KeyInfo>
+ (
+-	NgpKey::SP1,
+-	NgpKey::SP2,
+-	NgpKey::SP3,
+-	NgpKey::SP4,
+-	NgpKey::SP5,
+-	NgpKey::SP6,
+-	NgpKey::SP7,
+-	NgpKey::SP8
++	NgpKey::SP1
+ );
+ 
+-/* A+B 동시입력(분노 폭발) — 터치로는 두 버튼을 같은 프레임에 누르기가 어렵다 */
++/* A+B 동시입력 — 터치로는 두 버튼을 같은 프레임에 누르기가 어렵다.
++   **뒤를 잡고 누르면 비오의**가 나간다(엔진이 처리). */
+ constexpr auto abKeyInfo = makeArray<KeyInfo>(NgpKey::AB);
+ 
+ constexpr auto gpKeyInfo = concatToArrayNow<dpadKeyInfo, optionKeyInfo, faceKeyInfo, turboFaceKeyInfo, spKeyInfo, abKeyInfo>;
+@@ -115,15 +111,8 @@
+ 		KeyMapping{NgpKey::Option, Keycode::ENTER},
+ 		KeyMapping{NgpKey::B, Keycode::Z},
+ 		KeyMapping{NgpKey::A, Keycode::X},
+-		/* SS2 원버튼 — 남는 키에 얹는다 */
++		/* SS2 원버튼 — SP 하나와 A+B 뿐이다 (뒤+A+B = 비오의) */
+ 		KeyMapping{NgpKey::SP1, Keycode::A},
+-		KeyMapping{NgpKey::SP2, Keycode::S},
+-		KeyMapping{NgpKey::SP3, Keycode::D},
+-		KeyMapping{NgpKey::SP4, Keycode::F},
+-		KeyMapping{NgpKey::SP5, Keycode::Q},
+-		KeyMapping{NgpKey::SP6, Keycode::W},
+-		KeyMapping{NgpKey::SP7, Keycode::E},
+-		KeyMapping{NgpKey::SP8, Keycode::R},
+ 		KeyMapping{NgpKey::AB, Keycode::C},
+ 	};
+ 
+@@ -136,16 +125,9 @@
+ 		KeyMapping{NgpKey::Option, Keycode::GAME_START},
+ 		KeyMapping{NgpKey::B, Keycode::GAME_X},
+ 		KeyMapping{NgpKey::A, Keycode::GAME_A},
+-		/* NGPC는 버튼이 셋뿐이라 패드의 나머지가 통째로 논다 — 거기에 필살기를 단다 */
++		/* 남는 페이스 버튼 둘에 SP 와 A+B 를 단다 (뒤+A+B = 비오의) */
+ 		KeyMapping{NgpKey::SP1, Keycode::GAME_B},
+-		KeyMapping{NgpKey::SP2, Keycode::GAME_Y},
+-		KeyMapping{NgpKey::SP3, Keycode::GAME_L1},
+-		KeyMapping{NgpKey::SP4, Keycode::GAME_R1},
+-		KeyMapping{NgpKey::SP5, Keycode::GAME_L2},
+-		KeyMapping{NgpKey::SP6, Keycode::GAME_R2},
+-		KeyMapping{NgpKey::SP7, Keycode::GAME_LEFT_THUMB},
+-		KeyMapping{NgpKey::SP8, Keycode::GAME_RIGHT_THUMB},
+-		KeyMapping{NgpKey::AB, Keycode::GAME_SELECT},
++		KeyMapping{NgpKey::AB, Keycode::GAME_Y},
+ 	};
+ 
+ 	static constexpr std::array wiimoteMap
+diff -ruN a/src/main/EmuMenuViews.cc b/src/main/EmuMenuViews.cc
+--- a/src/main/EmuMenuViews.cc	2026-08-20 05:06:07.624899132 +0000
++++ b/src/main/EmuMenuViews.cc	2026-08-20 05:06:07.626678557 +0000
+@@ -14,6 +14,7 @@
+ 	along with NGP.emu.  If not, see <http://www.gnu.org/licenses/> */
+ 
+ #include <ss2sp/ss2sp.h>
++#include <ss2comm/ss2comm.h>
+ 
+ import system;
+ import emuex;
+@@ -252,6 +253,33 @@
+ 		}
+ 	};
+ 
++	/* SS2 캐릭터 해설 — 화면 하단 알림으로 한 줄씩 나온다 */
++	BoolMenuItem ss2commEnabled
++	{
++		"SS2 Character Commentary", attachParams(),
++		system().ss2commEnabled,
++		"Off", "On",
++		[this](BoolMenuItem &item, View &, Input::Event e)
++		{
++			system().ss2commEnabled = item.flipBoolValue(*this);
++		}
++	};
++
++	TextMenuItem ss2commSpeakerItem[4]
++	{
++		{"Haohmaru", attachParams(), [this](){ system().ss2commSpeaker = 0; }},
++		{"Nakoruru", attachParams(), [this](){ system().ss2commSpeaker = 1; }},
++		{"Hanzo",    attachParams(), [this](){ system().ss2commSpeaker = 2; }},
++		{"Galford",  attachParams(), [this](){ system().ss2commSpeaker = 3; }},
++	};
++
++	MultiChoiceMenuItem ss2commSpeaker
++	{
++		"SS2 Commentator", attachParams(),
++		(int)system().ss2commSpeaker,
++		ss2commSpeakerItem
++	};
++
+ 	TextMenuItem ss2spSlots
+ 	{
+ 		"SS2 Move Assignment", attachParams(),
+@@ -271,6 +299,8 @@
+ 		item.emplace_back(&ss2spEnabled);
+ 		item.emplace_back(&ss2spLayout);
+ 		item.emplace_back(&ss2spSlots);
++		item.emplace_back(&ss2commEnabled);
++		item.emplace_back(&ss2commSpeaker);
+ 		item.emplace_back(&saveFilenameType);
+ 	}
+ };
+diff -ruN a/src/main/Main.cc b/src/main/Main.cc
+--- a/src/main/Main.cc	2026-08-20 05:06:07.598138687 +0000
++++ b/src/main/Main.cc	2026-08-20 05:06:07.599938197 +0000
+@@ -16,6 +16,7 @@
+ module;
+ #include <mednafen/mednafen.h>
+ #include <ss2sp/ss2sp.h>
++#include <ss2comm/ss2comm.h>
+ #include <mednafen/state-driver.h>
+ #include <mednafen/MemoryStream.h>
+ #include <ngp/neopop.h>
+@@ -115,8 +116,38 @@
+ 	{
+ 		ss2sp_set_layout(ss2spLayoutSP);
+ 		MDFN_IEN_NGP::storeB(0x6F82, ss2sp_frame(inputBuff, spTrig));
++		/* SP 를 눌렀는데 아무것도 안 나간 이유를 알려 준다 —
++		   1 = 카드가 없어 카드 기술을 걸렀다, 2 = 그 자리에도 중립에도 기술이 없다. */
++		if(ss2sp_card_block)
++		{
++			/* 지금은 1(카드 없음)만 쓴다 — 빈 자리는 그냥 베기로 떨어진다 */
++			ss2sp_card_block = 0;
++			ss2comm_notify(SS2COMM_MSG_NOCARD);
++		}
+ 	}
+ 	EmuEx::runFrame(*this, mdfnGameInfo, taskCtx, video, mSurfacePix, audio, maxAudioFrames);
++	/* ── SS2 캐릭터 해설 ────────────────────────────────────────
++	   프레임을 돌린 뒤 램을 읽어 이벤트를 잡는다(브라우저판·코어판과 같은 엔진).
++	   토스트는 UI 스레드 것이라 여기서 직접 못 띄운다 → runOnMainThread 로 넘긴다.
++	   대사 문자열은 엔진 내부 정적 버퍼라 링 버퍼에 복사해 두고 그 포인터만 넘긴다
++	   (델리게이트 저장 공간이 16바이트라 std::string 은 못 담는다). */
++	ss2comm_set_enabled(ss2commEnabled);
++	if(ss2commEnabled)
++	{
++		ss2comm_set_speaker(ss2commSpeaker);
++		if(auto line = ss2comm_frame(); line)
++		{
++			static std::array<std::array<char, 160>, 4> ring{};
++			static unsigned ringPos{};
++			auto &slot = ring[ringPos++ & 3];
++			std::snprintf(slot.data(), slot.size(), "%s", line);
++			auto &app = gApp();
++			app.runOnMainThread([&app, msg = slot.data()](ApplicationContext)
++			{
++				app.postMessage(2, false, msg);
++			});
++		}
++	}
+ }
+ 
+ }
+diff -ruN a/src/main/options.cc b/src/main/options.cc
+--- a/src/main/options.cc	2026-08-20 05:06:07.607214980 +0000
++++ b/src/main/options.cc	2026-08-20 05:06:07.608944976 +0000
+@@ -17,6 +17,7 @@
+ #include <mednafen/mednafen.h>
+ #include <mednafen/general.h>
+ #include <ss2sp/ss2sp.h>
++#include <ss2comm/ss2comm.h>
+ 
+ module system;
+ 
+@@ -33,6 +34,8 @@
+ 			case CFGKEY_NO_MD5_FILENAMES: return readOptionValue(io, noMD5InFilenames);
+ 			case CFGKEY_SS2SP_ENABLED: return readOptionValue(io, ss2spEnabled);
+ 			case CFGKEY_SS2SP_LAYOUT: return readOptionValue(io, ss2spLayoutSP);
++			case CFGKEY_SS2COMM_ENABLED: return readOptionValue(io, ss2commEnabled);
++			case CFGKEY_SS2COMM_SPK: return readOptionValue(io, ss2commSpeaker);
+ 			case CFGKEY_SS2SP_SLOTS:
+ 				return readOptionValue<Ss2SlotBlob>(io, [](Ss2SlotBlob v){ ss2sp_load_slots(v.data()); });
+ 		}
+@@ -48,6 +51,8 @@
+ 		writeOptionValueIfNotDefault(io, CFGKEY_NO_MD5_FILENAMES, noMD5InFilenames, false);
+ 		writeOptionValueIfNotDefault(io, CFGKEY_SS2SP_ENABLED, ss2spEnabled, true);
+ 		writeOptionValueIfNotDefault(io, CFGKEY_SS2SP_LAYOUT, ss2spLayoutSP, true);
++		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_ENABLED, ss2commEnabled, true);
++		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_SPK, ss2commSpeaker, uint8_t{});
+ 		{
+ 			/* 기술 배치 210바이트. 기본값과 같으면 안 쓴다. */
+ 			Ss2SlotBlob cur{}, def{};
+diff -ruN a/src/main/system.ccm b/src/main/system.ccm
+--- a/src/main/system.ccm	2026-08-20 05:06:07.616256861 +0000
++++ b/src/main/system.ccm	2026-08-20 05:06:07.618047399 +0000
+@@ -17,6 +17,7 @@
+ #include <mednafen/mednafen.h>
+ #include <ngp/mem.h>
+ #include <ss2sp/ss2sp.h>
++#include <ss2comm/ss2comm.h>
+ 
+ export module system;
+ import emuex;
+@@ -44,7 +45,8 @@
+ 	   8부터는 실기에 없는 가상 키다 — 패드 바이트로 가지 않고
+ 	   엔진 트리거 비트로만 쓰인다. */
+ 	/* 엔진(ss2sp_frame)은 트리거 비트를 9개까지 읽는다.
+-	   SP8(비트 7)은 유파를 가리지 않고 **비오의**(←→↓+A) 자리다 — 엔진이 직접 낸다.
++	   v0.5: 쓰는 것은 SP1 하나뿐이다. 비오의는 **뒤+A+B** 로 옮겼다(엔진이 패드에서 직접 읽는다).
++	   SP2~SP8 은 키 코드만 남겨 둔다 — 옛 설정이 남아 있어도 엔진이 무시한다.
+ 	   분노 MAX 일 때만 나가는 기술이라 방향 조합에 끼워 두면 평소엔 죽은 자리가 된다.
+ 	   그 대신 기술이 8개인 유파(한조·나찰)는 마지막 기술 하나가 버튼 직결에서 밀린다.
+ 	   그 기술도 SP+방향 자리에는 그대로 있다. */
+@@ -71,6 +73,7 @@
+ 	CFGKEY_NGPKEY_LANGUAGE = 269, CFGKEY_NO_MD5_FILENAMES = 270,
+ 	/* SS2 원버튼 */
+ 	CFGKEY_SS2SP_SLOTS = 271, CFGKEY_SS2SP_ENABLED = 272, CFGKEY_SS2SP_LAYOUT = 273,
++	CFGKEY_SS2COMM_ENABLED = 274, CFGKEY_SS2COMM_SPK = 275,
+ };
+ 
+ export class NgpSystem final: public EmuSystem
+@@ -84,12 +87,15 @@
+ 		.defaultValue = false
+ 	}> optionNGPLanguage;
+ 	uint8_t inputBuff{};
+-	uint16_t spTrig{};        /* SP1~SP6 눌림 비트 */
++	uint16_t spTrig{};        /* SP 눌림 비트 (지금은 비트0 = SP 만 쓴다) */
+ 	bool ss2spEnabled{true};  /* 옵션에서 끌 수 있다 */
+ 	/* .emu 계열은 화면 버튼을 많이 못 얹고 핫키도 빈약하다.
+ 	   그래서 기본을 **SP 하나 + 방향**으로 둔다 — 브라우저 실행기와 같은 감각.
+ 	   물리 패드를 쓰면 SP2~SP6 이 기술 1~5번으로 그대로 살아 있다. */
+ 	bool ss2spLayoutSP{true};
++	/* SS2 캐릭터 해설 — 화면 하단 알림으로 한 줄씩. 화자 0 하오마루 1 나코루루 2 한조 3 갈포드 */
++	bool ss2commEnabled{true};
++	uint8_t ss2commSpeaker{};
+ 	MutablePixmapView mSurfacePix;
+ 	static constexpr WSize vidBufferPx{160, 152};
+ 	alignas(8) uint32_t pixBuff[vidBufferPx.x * vidBufferPx.y]{};
+@@ -104,6 +110,7 @@
+ 		Mednafen::MDFNGameInfo = &mdfnGameInfo;
+ 		mdfnGameInfo.SetInput(0, "gamepad", (uint8*)&inputBuff);
+ 		ss2sp_set_ram(MDFN_IEN_NGP::CPUExRAM);
++		ss2comm_set_ram(MDFN_IEN_NGP::CPUExRAM);
+ 	}
+ 
+ 	// required API functions
+@@ -123,6 +130,7 @@
+ 		inputBuff = {};
+ 		spTrig = {};
+ 		ss2sp_reset();
++		ss2comm_reset();
+ 		MDFN_IEN_NGP::storeB(0x6F82, 0);
+ 	}
+ 

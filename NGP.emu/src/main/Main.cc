@@ -16,6 +16,7 @@
 module;
 #include <mednafen/mednafen.h>
 #include <ss2sp/ss2sp.h>
+#include <ss2comm/ss2comm.h>
 #include <mednafen/state-driver.h>
 #include <mednafen/MemoryStream.h>
 #include <ngp/neopop.h>
@@ -115,8 +116,38 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	{
 		ss2sp_set_layout(ss2spLayoutSP);
 		MDFN_IEN_NGP::storeB(0x6F82, ss2sp_frame(inputBuff, spTrig));
+		/* SP 를 눌렀는데 아무것도 안 나간 이유를 알려 준다 —
+		   1 = 카드가 없어 카드 기술을 걸렀다, 2 = 그 자리에도 중립에도 기술이 없다. */
+		if(ss2sp_card_block)
+		{
+			/* 지금은 1(카드 없음)만 쓴다 — 빈 자리는 그냥 베기로 떨어진다 */
+			ss2sp_card_block = 0;
+			ss2comm_notify(SS2COMM_MSG_NOCARD);
+		}
 	}
 	EmuEx::runFrame(*this, mdfnGameInfo, taskCtx, video, mSurfacePix, audio, maxAudioFrames);
+	/* ── SS2 캐릭터 해설 ────────────────────────────────────────
+	   프레임을 돌린 뒤 램을 읽어 이벤트를 잡는다(브라우저판·코어판과 같은 엔진).
+	   토스트는 UI 스레드 것이라 여기서 직접 못 띄운다 → runOnMainThread 로 넘긴다.
+	   대사 문자열은 엔진 내부 정적 버퍼라 링 버퍼에 복사해 두고 그 포인터만 넘긴다
+	   (델리게이트 저장 공간이 16바이트라 std::string 은 못 담는다). */
+	ss2comm_set_enabled(ss2commEnabled);
+	if(ss2commEnabled)
+	{
+		ss2comm_set_speaker(ss2commSpeaker);
+		if(auto line = ss2comm_frame(); line)
+		{
+			static std::array<std::array<char, 160>, 4> ring{};
+			static unsigned ringPos{};
+			auto &slot = ring[ringPos++ & 3];
+			std::snprintf(slot.data(), slot.size(), "%s", line);
+			auto &app = gApp();
+			app.runOnMainThread([&app, msg = slot.data()](ApplicationContext)
+			{
+				app.postMessage(2, false, msg);
+			});
+		}
+	}
 }
 
 }
