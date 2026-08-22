@@ -1,17 +1,84 @@
 name: EX Emulators
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
+  # ── 0) 파일 점검 (20초) ────────────────────────────────────────────
+  # 올린 파일이 모자라거나 옛 판이면 여기서 바로 죽는다.
+  # 20분 빌드가 끝난 뒤에 C++ 오류로 죽는 걸 막으려고 둔 것.
+  preflight:
+    name: SS2 파일 점검
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: SS2 파일 14개가 다 있고 짝이 맞는지 본다
+      run: |
+        miss=0
+        need() { [ -f "$1" ] || { echo "::error::빠진 파일 → $1"; miss=1; }; }
+        has()  { grep -q "$2" "$1" 2>/dev/null || { echo "::error::$1 이(가) 옛 판이다 — '$2' 가 없다"; miss=1; }; }
+
+        for f in \
+          NGP.emu/src/CMakeLists.txt \
+          NGP.emu/src/main/Main.cc \
+          NGP.emu/src/main/system.ccm \
+          NGP.emu/src/main/options.cc \
+          NGP.emu/src/main/EmuMenuViews.cc \
+          NGP.emu/src/main/AppMeta.cc \
+          NGP.emu/src/ss2sp/ss2sp.c \
+          NGP.emu/src/ss2sp/ss2sp.h \
+          NGP.emu/src/ss2sp/ss2sp_moves.h \
+          NGP.emu/src/ss2comm/ss2comm.c \
+          NGP.emu/src/ss2comm/ss2comm.h \
+          NGP.emu/src/ss2comm/ss2comm_lines.h \
+          NGP.emu/src/ss2comm/ss2comm_font.h \
+          NGP.emu/src/ss2comm/ss2comm_font11.h ; do need "$f"; done
+
+        has NGP.emu/src/CMakeLists.txt        'ss2sp/ss2sp.c'
+        has NGP.emu/src/CMakeLists.txt        'ss2comm/ss2comm.c'
+        has NGP.emu/src/main/system.ccm       'ss2commEnabled'
+        has NGP.emu/src/main/system.ccm       'ss2commDraw'
+        has NGP.emu/src/main/system.ccm       'ss2CommitPix'
+        has NGP.emu/src/main/Main.cc          'ss2CommitPix'
+        has NGP.emu/src/main/Main.cc          'ss2comm_draw_enable'
+        has NGP.emu/src/main/Main.cc          'videoAspectRatioScale'
+        has NGP.emu/src/main/options.cc       'CFGKEY_SS2COMM_DRAW'
+        has NGP.emu/src/main/EmuMenuViews.cc  'ss2commDraw'
+
+        if [ "$miss" != 0 ]; then
+          echo "::error::SS2 파일이 모자라거나 짝이 안 맞습니다. upload/3_ngpemu 의 NGP.emu 폴더를 통째로 다시 올리세요."
+          exit 1
+        fi
+        echo "✅ SS2 파일 14개 · 짝 다 맞음 — 빌드로 넘어갑니다"
+
+  # ── 1) 밑작업 (NDK·imagine·EmuFramework) ──────────────────────────
+  # imagine / EmuFramework 가 그대로면 지난번 캐시를 그냥 쓴다.
+  # NGP.emu 만 고친 판올림에서는 이 잡이 통째로 건너뛰어진다 (20분 → 1분).
   build:
     name: Build base
+    needs: [preflight]
     runs-on: ubuntu-latest
+    outputs:
+      basekey: ${{ steps.basekey.outputs.key }}
     steps:
     - name: Checkout emu-ex-plus-alpha repo
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+    - name: 캐시 열쇠 만들기
+      id: basekey
+      run: echo "key=base-v1-${{ hashFiles('imagine/**', 'EmuFramework/**') }}" >> "$GITHUB_OUTPUT"
+    - name: 밑작업 캐시가 이미 있나 본다
+      id: basecache
+      uses: actions/cache/restore@v4
+      with:
+        path: ./
+        key: ${{ steps.basekey.outputs.key }}
+        lookup-only: true
     - name: Decode debug keystore
+      if: steps.basecache.outputs.cache-hit != 'true'
       env:
         DEBUG_KEYSTORE: ${{ secrets.DEBUG_KEYSTORE }}
       run: |
@@ -24,10 +91,12 @@ jobs:
           mv .debug.keystore ~/.android/debug.keystore
         fi
     - name: Install build dependencies
+      if: steps.basecache.outputs.cache-hit != 'true'
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends autoconf automake autopoint bash gcc-arm-linux-gnueabi file gawk gettext git libtool libtool-bin make nasm pkg-config unzip wget
     - name: Install Latest CMake
+      if: steps.basecache.outputs.cache-hit != 'true'
       uses: lukka/get-cmake@latest
       with:
         # imagine/cmake/config.cmake 가 CMAKE_EXPERIMENTAL_CXX_IMPORT_STD 를
@@ -36,11 +105,13 @@ jobs:
         # CXX_MODULE_STD 를 켠 타깃(imagine / emuframework)에서 configure 가 죽는다.
         cmakeVersion: "~4.3.0"
     - name: Set up JDK 21
+      if: steps.basecache.outputs.cache-hit != 'true'
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '21'
     - name: Set up environment
+      if: steps.basecache.outputs.cache-hit != 'true'
       run: |
         mkdir imagine-sdk
         NDK_VERSION='r30-beta1'
@@ -56,31 +127,36 @@ jobs:
         echo "COMMIT_PREFIX=$(echo ${{ github.sha }} | cut -c1-8)" >> "$GITHUB_ENV_FILE"
         cat "$GITHUB_ENV_FILE" >> $GITHUB_ENV
     - name: Run script
+      if: steps.basecache.outputs.cache-hit != 'true'
       working-directory: imagine/bundle/all
       run: |
         ./makeAll-android.sh install
       shell: bash
     - name: Build environment
+      if: steps.basecache.outputs.cache-hit != 'true'
       run: |
         $IMAGINE_PATH/android.sh config
         $IMAGINE_PATH/android.sh installLinks --config Release
         $EMUFRAMEWORK_PATH/android.sh config
         $EMUFRAMEWORK_PATH/android.sh installLinks --config Release
     - name: Keep cache small
+      if: steps.basecache.outputs.cache-hit != 'true'
       run: rm -rf .git
     - name: Save cache
+      if: steps.basecache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ./
-        key: ${{ github.sha }}-base
+        key: ${{ steps.basekey.outputs.key }}
 
+  # ── 2) APK 만들기 (NGP.emu 하나만) ────────────────────────────────
   build_images:
     name: Build images
     needs: [build]
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: ["2600.emu", "C64.emu", "GBA.emu", "GBC.emu", "Lynx.emu", "MD.emu", "MSX.emu", "NEO.emu", "NES.emu", "NGP.emu", "PCE.emu", "Snes9x", "Snes9x-1.43", "Swan.emu", "Saturn.emu"]
+        image: ["NGP.emu"]
     steps:
     - name: Install build dependencies
       run: |
@@ -89,10 +165,6 @@ jobs:
     - name: Install Latest CMake
       uses: lukka/get-cmake@latest
       with:
-        # imagine/cmake/config.cmake 가 CMAKE_EXPERIMENTAL_CXX_IMPORT_STD 를
-        # 451f2fe2-a8a2-47c3-bc32-94786d8fc91b 로 박아 두었고, 이 UUID는 CMake 4.3 전용이다.
-        # @latest 가 4.4+ 를 깔면 UUID가 안 맞아 `import std` 가 꺼지고,
-        # CXX_MODULE_STD 를 켠 타깃(imagine / emuframework)에서 configure 가 죽는다.
         cmakeVersion: "~4.3.0"
     - name: Set up JDK 21
       uses: actions/setup-java@v4
@@ -103,110 +175,38 @@ jobs:
       uses: actions/cache/restore@v4
       with:
         path: ./
-        key: ${{ github.sha }}-base
+        key: ${{ needs.build.outputs.basekey }}
         fail-on-cache-miss: true
+    - name: 이번 커밋의 NGP.emu 소스로 덮어쓴다
+      # 캐시는 imagine/EmuFramework 만 재활용하는 것이고,
+      # NGP.emu 소스는 반드시 지금 커밋의 것이어야 한다.
+      uses: actions/checkout@v4
+      with:
+        path: __fresh
+    - name: 덮어쓰기
+      run: |
+        rm -rf NGP.emu/src
+        cp -a __fresh/NGP.emu/src NGP.emu/src
+        rm -rf __fresh
     - name: Set up environment
       run: |
         GITHUB_ENV_FILE=env.github
         cat "$GITHUB_ENV_FILE" >> $GITHUB_ENV
     - name: Create EX-Emulators directory
       run: mkdir EX-Emulators
-    - name: Build 2600.emu
-      if: ${{ matrix.image == '2600.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/2600Emu-release.apk "../EX-Emulators/2600Emu-${COMMIT_PREFIX}.apk"
-    - name: Build C64.emu
-      if: ${{ matrix.image == 'C64.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/C64Emu-release.apk "../EX-Emulators/C64Emu-${COMMIT_PREFIX}.apk"
-    - name: Build GBA.emu
-      if: ${{ matrix.image == 'GBA.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/GbaEmu-release.apk "../EX-Emulators/GbaEmu-${COMMIT_PREFIX}.apk"
-    - name: Build GBC.emu
-      if: ${{ matrix.image == 'GBC.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/GbcEmu-release.apk "../EX-Emulators/GbcEmu-${COMMIT_PREFIX}.apk"
-    - name: Build Lynx.emu
-      if: ${{ matrix.image == 'Lynx.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/LynxEmu-release.apk "../EX-Emulators/LynxEmu-${COMMIT_PREFIX}.apk"
-    - name: Build MD.emu
-      if: ${{ matrix.image == 'MD.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/MdEmu-release.apk "../EX-Emulators/MdEmu-${COMMIT_PREFIX}.apk"
-    - name: Build MSX.emu
-      if: ${{ matrix.image == 'MSX.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/MsxEmu-release.apk "../EX-Emulators/MsxEmu-${COMMIT_PREFIX}.apk"
-    - name: Build NEO.emu
-      if: ${{ matrix.image == 'NEO.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/NeoEmu-release.apk "../EX-Emulators/NeoEmu-${COMMIT_PREFIX}.apk"
-    - name: Build NES.emu
-      if: ${{ matrix.image == 'NES.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/NesEmu-release.apk "../EX-Emulators/NesEmu-${COMMIT_PREFIX}.apk"
     - name: Build NGP.emu
       if: ${{ matrix.image == 'NGP.emu' }}
       working-directory: ${{ matrix.image }}
       run: |
         make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
         cp build/android/build/outputs/apk/release/NgpEmu-release.apk "../EX-Emulators/NgpEmu-${COMMIT_PREFIX}.apk"
-    - name: Build PCE.emu
-      if: ${{ matrix.image == 'PCE.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/PceEmu-release.apk "../EX-Emulators/PceEmu-${COMMIT_PREFIX}.apk"
-    - name: Build Snes9x
-      if: ${{ matrix.image == 'Snes9x' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/Snes9xEXPlus-release.apk "../EX-Emulators/Snes9xEXPlus-${COMMIT_PREFIX}.apk"
-    - name: Build Snes9x-1.43-9
-      if: ${{ matrix.image == 'Snes9x-1.43' }}
-      working-directory: Snes9x/1.43
-      run: |
-        make -f android.mk android-apk V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/Snes9xEX-release.apk "../../EX-Emulators/Snes9xEX-${COMMIT_PREFIX}.apk"
-    - name: Build Swan.emu
-      if: ${{ matrix.image == 'Swan.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/SwanEmu-release.apk "../EX-Emulators/SwanEmu-${COMMIT_PREFIX}.apk"
-    - name: Build Saturn.emu
-      if: ${{ matrix.image == 'Saturn.emu' }}
-      working-directory: ${{ matrix.image }}
-      run: |
-        make -f android.mk android-apk CONFIG=Release V=1 -j`nproc`
-        cp build/android/build/outputs/apk/release/SaturnEmu-release.apk "../EX-Emulators/SaturnEmu-${COMMIT_PREFIX}.apk"
     - name: Upload EX-Emulators artifacts
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.image }}
         path: EX-Emulators/
 
+  # ── 3) 릴리스에 APK 붙이기 ────────────────────────────────────────
   release:
     name: Release
     runs-on: ubuntu-latest
@@ -233,7 +233,6 @@ jobs:
           echo "-> Creating ${file_name//-${COMMIT_PREFIX}/}.zip"
           zip "../dist/${file_name//-${COMMIT_PREFIX}/}.zip" "${file_name}.apk"
         done
-        zip -r "../dist/EX-Emulators.zip" *.apk
         cp NgpEmu-*.apk ../dist/NgpEmu.apk
     - name: Update Git Tag
       run: |
