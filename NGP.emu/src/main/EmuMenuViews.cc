@@ -14,6 +14,7 @@
 	along with NGP.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <ss2sp/ss2sp.h>
+#include <ss2comm/ss2comm.h>
 
 import system;
 import emuex;
@@ -252,6 +253,33 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		}
 	};
 
+	/* SS2 캐릭터 해설 — 화면 하단 알림으로 한 줄씩 나온다 */
+	BoolMenuItem ss2commEnabled
+	{
+		"SS2 Character Commentary", attachParams(),
+		system().ss2commEnabled,
+		"Off", "On",
+		[this](BoolMenuItem &item, View &, Input::Event e)
+		{
+			system().ss2commEnabled = item.flipBoolValue(*this);
+		}
+	};
+
+	TextMenuItem ss2commSpeakerItem[4]
+	{
+		{"Haohmaru", attachParams(), [this](){ system().ss2commSpeaker = 0; }},
+		{"Nakoruru", attachParams(), [this](){ system().ss2commSpeaker = 1; }},
+		{"Hanzo",    attachParams(), [this](){ system().ss2commSpeaker = 2; }},
+		{"Galford",  attachParams(), [this](){ system().ss2commSpeaker = 3; }},
+	};
+
+	MultiChoiceMenuItem ss2commSpeaker
+	{
+		"SS2 Commentator", attachParams(),
+		(int)system().ss2commSpeaker,
+		ss2commSpeakerItem
+	};
+
 	TextMenuItem ss2spSlots
 	{
 		"SS2 Move Assignment", attachParams(),
@@ -271,6 +299,8 @@ public:
 		item.emplace_back(&ss2spEnabled);
 		item.emplace_back(&ss2spLayout);
 		item.emplace_back(&ss2spSlots);
+		item.emplace_back(&ss2commEnabled);
+		item.emplace_back(&ss2commSpeaker);
 		item.emplace_back(&saveFilenameType);
 	}
 };

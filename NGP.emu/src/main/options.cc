@@ -17,6 +17,7 @@ module;
 #include <mednafen/mednafen.h>
 #include <mednafen/general.h>
 #include <ss2sp/ss2sp.h>
+#include <ss2comm/ss2comm.h>
 
 module system;
 
@@ -33,6 +34,8 @@ bool NgpSystem::readConfig(ConfigType type, MapIO &io, unsigned key)
 			case CFGKEY_NO_MD5_FILENAMES: return readOptionValue(io, noMD5InFilenames);
 			case CFGKEY_SS2SP_ENABLED: return readOptionValue(io, ss2spEnabled);
 			case CFGKEY_SS2SP_LAYOUT: return readOptionValue(io, ss2spLayoutSP);
+			case CFGKEY_SS2COMM_ENABLED: return readOptionValue(io, ss2commEnabled);
+			case CFGKEY_SS2COMM_SPK: return readOptionValue(io, ss2commSpeaker);
 			case CFGKEY_SS2SP_SLOTS:
 				return readOptionValue<Ss2SlotBlob>(io, [](Ss2SlotBlob v){ ss2sp_load_slots(v.data()); });
 		}
@@ -48,6 +51,8 @@ void NgpSystem::writeConfig(ConfigType type, FileIO &io)
 		writeOptionValueIfNotDefault(io, CFGKEY_NO_MD5_FILENAMES, noMD5InFilenames, false);
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2SP_ENABLED, ss2spEnabled, true);
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2SP_LAYOUT, ss2spLayoutSP, true);
+		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_ENABLED, ss2commEnabled, true);
+		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_SPK, ss2commSpeaker, uint8_t{});
 		{
 			/* 기술 배치 210바이트. 기본값과 같으면 안 쓴다. */
 			Ss2SlotBlob cur{}, def{};

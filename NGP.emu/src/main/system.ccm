@@ -17,6 +17,7 @@ module;
 #include <mednafen/mednafen.h>
 #include <ngp/mem.h>
 #include <ss2sp/ss2sp.h>
+#include <ss2comm/ss2comm.h>
 
 export module system;
 import emuex;
@@ -44,7 +45,8 @@ export enum class NgpKey: KeyCode
 	   8부터는 실기에 없는 가상 키다 — 패드 바이트로 가지 않고
 	   엔진 트리거 비트로만 쓰인다. */
 	/* 엔진(ss2sp_frame)은 트리거 비트를 9개까지 읽는다.
-	   SP8(비트 7)은 유파를 가리지 않고 **비오의**(←→↓+A) 자리다 — 엔진이 직접 낸다.
+	   v0.5: 쓰는 것은 SP1 하나뿐이다. 비오의는 **뒤+A+B** 로 옮겼다(엔진이 패드에서 직접 읽는다).
+	   SP2~SP8 은 키 코드만 남겨 둔다 — 옛 설정이 남아 있어도 엔진이 무시한다.
 	   분노 MAX 일 때만 나가는 기술이라 방향 조합에 끼워 두면 평소엔 죽은 자리가 된다.
 	   그 대신 기술이 8개인 유파(한조·나찰)는 마지막 기술 하나가 버튼 직결에서 밀린다.
 	   그 기술도 SP+방향 자리에는 그대로 있다. */
@@ -71,6 +73,7 @@ enum NgpConfigKey
 	CFGKEY_NGPKEY_LANGUAGE = 269, CFGKEY_NO_MD5_FILENAMES = 270,
 	/* SS2 원버튼 */
 	CFGKEY_SS2SP_SLOTS = 271, CFGKEY_SS2SP_ENABLED = 272, CFGKEY_SS2SP_LAYOUT = 273,
+	CFGKEY_SS2COMM_ENABLED = 274, CFGKEY_SS2COMM_SPK = 275,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -84,12 +87,15 @@ public:
 		.defaultValue = false
 	}> optionNGPLanguage;
 	uint8_t inputBuff{};
-	uint16_t spTrig{};        /* SP1~SP6 눌림 비트 */
+	uint16_t spTrig{};        /* SP 눌림 비트 (지금은 비트0 = SP 만 쓴다) */
 	bool ss2spEnabled{true};  /* 옵션에서 끌 수 있다 */
 	/* .emu 계열은 화면 버튼을 많이 못 얹고 핫키도 빈약하다.
 	   그래서 기본을 **SP 하나 + 방향**으로 둔다 — 브라우저 실행기와 같은 감각.
 	   물리 패드를 쓰면 SP2~SP6 이 기술 1~5번으로 그대로 살아 있다. */
 	bool ss2spLayoutSP{true};
+	/* SS2 캐릭터 해설 — 화면 하단 알림으로 한 줄씩. 화자 0 하오마루 1 나코루루 2 한조 3 갈포드 */
+	bool ss2commEnabled{true};
+	uint8_t ss2commSpeaker{};
 	MutablePixmapView mSurfacePix;
 	static constexpr WSize vidBufferPx{160, 152};
 	alignas(8) uint32_t pixBuff[vidBufferPx.x * vidBufferPx.y]{};
@@ -104,6 +110,7 @@ public:
 		Mednafen::MDFNGameInfo = &mdfnGameInfo;
 		mdfnGameInfo.SetInput(0, "gamepad", (uint8*)&inputBuff);
 		ss2sp_set_ram(MDFN_IEN_NGP::CPUExRAM);
+		ss2comm_set_ram(MDFN_IEN_NGP::CPUExRAM);
 	}
 
 	// required API functions
@@ -123,6 +130,7 @@ public:
 		inputBuff = {};
 		spTrig = {};
 		ss2sp_reset();
+		ss2comm_reset();
 		MDFN_IEN_NGP::storeB(0x6F82, 0);
 	}
 

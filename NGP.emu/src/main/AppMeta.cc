@@ -51,20 +51,16 @@ constexpr auto faceKeyInfo = makeArray<KeyInfo>
 
 constexpr auto turboFaceKeyInfo = turbo(faceKeyInfo);
 
-/* SS2 원버튼 필살기 — 실기에 없는 가상 키. 화면 버튼으로도 따로 뜬다. */
+/* SS2 원버튼 필살기 — 실기에 없는 가상 키. 화면 버튼으로도 따로 뜬다.
+   v0.5: 버튼을 A·B·A+B·SP 넷으로 줄였다. 기술은 전부 SP+방향(기술 배치)으로 나가고,
+   비오의는 뒤+A+B 다. SP2~SP8 은 키 목록에서 뺐다(옛 설정이 남아 있어도 엔진이 무시한다). */
 constexpr auto spKeyInfo = makeArray<KeyInfo>
 (
-	NgpKey::SP1,
-	NgpKey::SP2,
-	NgpKey::SP3,
-	NgpKey::SP4,
-	NgpKey::SP5,
-	NgpKey::SP6,
-	NgpKey::SP7,
-	NgpKey::SP8
+	NgpKey::SP1
 );
 
-/* A+B 동시입력(분노 폭발) — 터치로는 두 버튼을 같은 프레임에 누르기가 어렵다 */
+/* A+B 동시입력 — 터치로는 두 버튼을 같은 프레임에 누르기가 어렵다.
+   **뒤를 잡고 누르면 비오의**가 나간다(엔진이 처리). */
 constexpr auto abKeyInfo = makeArray<KeyInfo>(NgpKey::AB);
 
 constexpr auto gpKeyInfo = concatToArrayNow<dpadKeyInfo, optionKeyInfo, faceKeyInfo, turboFaceKeyInfo, spKeyInfo, abKeyInfo>;
@@ -115,15 +111,8 @@ std::span<const KeyConfigDesc> AppMeta::defaultKeyConfigs()
 		KeyMapping{NgpKey::Option, Keycode::ENTER},
 		KeyMapping{NgpKey::B, Keycode::Z},
 		KeyMapping{NgpKey::A, Keycode::X},
-		/* SS2 원버튼 — 남는 키에 얹는다 */
+		/* SS2 원버튼 — SP 하나와 A+B 뿐이다 (뒤+A+B = 비오의) */
 		KeyMapping{NgpKey::SP1, Keycode::A},
-		KeyMapping{NgpKey::SP2, Keycode::S},
-		KeyMapping{NgpKey::SP3, Keycode::D},
-		KeyMapping{NgpKey::SP4, Keycode::F},
-		KeyMapping{NgpKey::SP5, Keycode::Q},
-		KeyMapping{NgpKey::SP6, Keycode::W},
-		KeyMapping{NgpKey::SP7, Keycode::E},
-		KeyMapping{NgpKey::SP8, Keycode::R},
 		KeyMapping{NgpKey::AB, Keycode::C},
 	};
 
@@ -136,16 +125,9 @@ std::span<const KeyConfigDesc> AppMeta::defaultKeyConfigs()
 		KeyMapping{NgpKey::Option, Keycode::GAME_START},
 		KeyMapping{NgpKey::B, Keycode::GAME_X},
 		KeyMapping{NgpKey::A, Keycode::GAME_A},
-		/* NGPC는 버튼이 셋뿐이라 패드의 나머지가 통째로 논다 — 거기에 필살기를 단다 */
+		/* 남는 페이스 버튼 둘에 SP 와 A+B 를 단다 (뒤+A+B = 비오의) */
 		KeyMapping{NgpKey::SP1, Keycode::GAME_B},
-		KeyMapping{NgpKey::SP2, Keycode::GAME_Y},
-		KeyMapping{NgpKey::SP3, Keycode::GAME_L1},
-		KeyMapping{NgpKey::SP4, Keycode::GAME_R1},
-		KeyMapping{NgpKey::SP5, Keycode::GAME_L2},
-		KeyMapping{NgpKey::SP6, Keycode::GAME_R2},
-		KeyMapping{NgpKey::SP7, Keycode::GAME_LEFT_THUMB},
-		KeyMapping{NgpKey::SP8, Keycode::GAME_RIGHT_THUMB},
-		KeyMapping{NgpKey::AB, Keycode::GAME_SELECT},
+		KeyMapping{NgpKey::AB, Keycode::GAME_Y},
 	};
 
 	static constexpr std::array wiimoteMap
