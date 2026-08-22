@@ -84,12 +84,46 @@ void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 {
 	static constexpr size_t maxRomSize = 0x400000;
 	EmuEx::loadContent(*this, mdfnGameInfo, io, maxRomSize);
+	/* 해설 띠에 그릴 얼굴은 **사용자 롬에서 실행 중에 뽑는다** — 배포물에 그림을 넣지 않는다.
+	   코어판(libretro)에도 같은 줄이 있다. 이 줄이 없으면 띠에 얼굴 자리가 빈다. */
+	ss2comm_set_rom(MDFN_IEN_NGP::ngpc_rom.orig_data, MDFN_IEN_NGP::ngpc_rom.length);
 	MDFN_IEN_NGP::SetPixelFormat(toMDFNSurface(mSurfacePix).format);
+}
+
+void NgpSystem::ss2SyncSurface()
+{
+	/* 띠는 화면 **위**에 붙는다. 그래서 게임은 버퍼의 30줄 아래부터 그려지게 한다 —
+	   코어판처럼 매 프레임 그림을 memmove 로 밀 필요가 없다. */
+	mSurfacePix = mFullPix.subView({0, ss2BandOn() ? ss2BandH : 0}, {ss2GameW, ss2GameH});
+}
+
+IG::MutablePixmapView NgpSystem::ss2CommitPix()
+{
+	if(!ss2BandOn())
+		return mSurfacePix;                 /* 띠 없음 — 게임 화면만 올린다 */
+	if(mFullPix.format().bytesPerPixel() == 2)
+	{
+		ss2comm_draw(reinterpret_cast<uint16_t*>(mFullPix.data()), mFullPix.pitchPx(), ss2GameW, ss2GameH);
+	}
+	else
+	{
+		/* 화면이 32비트다. 엔진은 RGB565 만 그리므로 따로 그린 뒤 띠 30줄만 변환해 얹는다. */
+		ss2comm_draw(ss2BandScratch, ss2GameW, ss2GameW, ss2GameH);
+		IG::PixmapView band{{{ss2GameW, ss2BandH}, IG::PixelFmtRGB565}, ss2BandScratch};
+		mFullPix.subView({0, 0}, {ss2GameW, ss2BandH}).writeConverted(band);
+	}
+	return mFullPix;
+}
+
+double NgpSystem::videoAspectRatioScale() const
+{
+	return ss2BandOn() ? double(ss2GameH) / double(ss2GameH + ss2BandH) : 1.;
 }
 
 bool NgpSystem::onVideoRenderFormatChange(EmuVideo &, PixelFormat fmt)
 {
-	mSurfacePix = {{vidBufferPx, fmt}, pixBuff};
+	mFullPix = {{vidBufferPx, fmt}, pixBuff};
+	ss2SyncSurface();
 	if(!hasContent())
 		return false;
 	MDFN_IEN_NGP::SetPixelFormat(toMDFNSurface(mSurfacePix).format);
@@ -125,6 +159,10 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 			ss2comm_notify(SS2COMM_MSG_NOCARD);
 		}
 	}
+	/* 띠 설정을 프레임 돌리기 **전에** 반영한다 — 게임이 그려질 자리가 여기서 정해진다.
+	   4 = 화면 밖 위 띠 (코어판과 같은 모드). 0 = 안 그림(알림 줄로 간다). */
+	ss2comm_draw_enable(ss2BandOn() ? 4 : 0);
+	ss2SyncSurface();
 	EmuEx::runFrame(*this, mdfnGameInfo, taskCtx, video, mSurfacePix, audio, maxAudioFrames);
 	/* ── SS2 캐릭터 해설 ────────────────────────────────────────
 	   프레임을 돌린 뒤 램을 읽어 이벤트를 잡는다(브라우저판·코어판과 같은 엔진).
@@ -135,7 +173,8 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	if(ss2commEnabled)
 	{
 		ss2comm_set_speaker(ss2commSpeaker);
-		if(auto line = ss2comm_frame(); line)
+		/* 띠를 켜면 코어가 직접 그리므로 알림은 띄우지 않는다 — 같은 줄이 두 번 나오면 지저분하다. */
+		if(auto line = ss2comm_frame(); line && !ss2comm_drawing())
 		{
 			static std::array<std::array<char, 160>, 4> ring{};
 			static unsigned ringPos{};
@@ -179,7 +218,7 @@ extern "C++" namespace Mednafen
 
 void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 {
-	espec->video->startFrameWithFormat(espec->taskCtx, static_cast<NgpSystem&>(*espec->sys).mSurfacePix);
+	espec->video->startFrameWithFormat(espec->taskCtx, static_cast<NgpSystem&>(*espec->sys).ss2CommitPix());
 }
 
 }

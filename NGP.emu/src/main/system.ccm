@@ -73,7 +73,7 @@ enum NgpConfigKey
 	CFGKEY_NGPKEY_LANGUAGE = 269, CFGKEY_NO_MD5_FILENAMES = 270,
 	/* SS2 원버튼 */
 	CFGKEY_SS2SP_SLOTS = 271, CFGKEY_SS2SP_ENABLED = 272, CFGKEY_SS2SP_LAYOUT = 273,
-	CFGKEY_SS2COMM_ENABLED = 274, CFGKEY_SS2COMM_SPK = 275,
+	CFGKEY_SS2COMM_ENABLED = 274, CFGKEY_SS2COMM_SPK = 275, CFGKEY_SS2COMM_DRAW = 276,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -96,9 +96,18 @@ public:
 	/* SS2 캐릭터 해설 — 화면 하단 알림으로 한 줄씩. 화자 0 하오마루 1 나코루루 2 한조 3 갈포드 */
 	bool ss2commEnabled{true};
 	uint8_t ss2commSpeaker{};
-	MutablePixmapView mSurfacePix;
-	static constexpr WSize vidBufferPx{160, 152};
+	/* 해설을 어디에 보여 줄까 — 0 알림 줄 / 1 게임 화면 **위**에 띠를 붙여 직접 그린다.
+	   띠 모드는 화자 얼굴까지 나온다. 얼굴은 배포물에 넣지 않고 사용자 롬에서 뽑는다. */
+	uint8_t ss2commDraw{};
+	/* 게임 160×152 위에 30px 띠를 붙일 수 있게 버퍼를 처음부터 크게 잡아 둔다.
+	   띠를 끄면 아래 152줄만 커밋하므로 화면은 원래대로 돌아간다. */
+	static constexpr int ss2GameW = 160, ss2GameH = 152, ss2BandH = 30;
+	MutablePixmapView mSurfacePix;   /* 게임이 그려지는 자리 (띠를 켜면 30줄 아래) */
+	MutablePixmapView mFullPix;      /* 띠까지 포함한 버퍼 전체 */
+	static constexpr WSize vidBufferPx{ss2GameW, ss2GameH + ss2BandH};
 	alignas(8) uint32_t pixBuff[vidBufferPx.x * vidBufferPx.y]{};
+	/* ss2comm_draw() 는 RGB565 전용이다. 화면이 32비트로 돌 때는 여기 그린 뒤 변환해 얹는다. */
+	uint16_t ss2BandScratch[ss2GameW * (ss2GameH + ss2BandH)]{};
 	bool noMD5InFilenames{};
 	// TODO: Mednafen/Neopop timing is based on 199 lines/frame, verify if this is correct
 	static constexpr FrameRate ngpFrameRate{6144000. / (199. * 515.)}; //~59.95Hz
@@ -122,6 +131,12 @@ public:
 	void readState(EmuApp&, std::span<uint8_t> buff);
 	size_t writeState(std::span<uint8_t> buff, SaveStateFlags);
 	bool readConfig(ConfigType, MapIO&, unsigned key);
+	/* 띠를 켜면 세로가 30줄 늘어난다 — 화면비를 그만큼 되돌린다.
+	   PCE.emu 가 보이는 줄 수를 바꿀 때 쓰는 것과 같은 자리다. */
+	double videoAspectRatioScale() const;
+	bool ss2BandOn() const { return ss2commEnabled && ss2commDraw; }
+	void ss2SyncSurface();              /* 게임이 그려질 자리를 띠 유무에 맞춘다 */
+	MutablePixmapView ss2CommitPix();   /* 띠를 그리고, 화면에 올릴 그림을 돌려준다 */
 	void writeConfig(ConfigType, FileIO&);
 	void reset(EmuApp&, ResetMode mode);
 

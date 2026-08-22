@@ -36,6 +36,7 @@ bool NgpSystem::readConfig(ConfigType type, MapIO &io, unsigned key)
 			case CFGKEY_SS2SP_LAYOUT: return readOptionValue(io, ss2spLayoutSP);
 			case CFGKEY_SS2COMM_ENABLED: return readOptionValue(io, ss2commEnabled);
 			case CFGKEY_SS2COMM_SPK: return readOptionValue(io, ss2commSpeaker);
+			case CFGKEY_SS2COMM_DRAW: return readOptionValue(io, ss2commDraw);
 			case CFGKEY_SS2SP_SLOTS:
 				return readOptionValue<Ss2SlotBlob>(io, [](Ss2SlotBlob v){ ss2sp_load_slots(v.data()); });
 		}
@@ -53,6 +54,7 @@ void NgpSystem::writeConfig(ConfigType type, FileIO &io)
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2SP_LAYOUT, ss2spLayoutSP, true);
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_ENABLED, ss2commEnabled, true);
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_SPK, ss2commSpeaker, uint8_t{});
+		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_DRAW, ss2commDraw, uint8_t{});
 		{
 			/* 기술 배치 210바이트. 기본값과 같으면 안 쓴다. */
 			Ss2SlotBlob cur{}, def{};

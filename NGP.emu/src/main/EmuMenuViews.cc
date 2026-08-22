@@ -280,6 +280,20 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		ss2commSpeakerItem
 	};
 
+	/* 해설을 어디에 보여 줄까. 띠 모드는 게임 화면 위에 30px 붙여 얼굴까지 그린다. */
+	TextMenuItem ss2commDrawItem[2]
+	{
+		{"Notification",        attachParams(), [this](){ system().ss2commDraw = 0; }},
+		{"Band above screen",   attachParams(), [this](){ system().ss2commDraw = 1; }},
+	};
+
+	MultiChoiceMenuItem ss2commDraw
+	{
+		"SS2 Commentary Display", attachParams(),
+		(int)system().ss2commDraw,
+		ss2commDrawItem
+	};
+
 	TextMenuItem ss2spSlots
 	{
 		"SS2 Move Assignment", attachParams(),
@@ -301,6 +315,7 @@ public:
 		item.emplace_back(&ss2spSlots);
 		item.emplace_back(&ss2commEnabled);
 		item.emplace_back(&ss2commSpeaker);
+		item.emplace_back(&ss2commDraw);
 		item.emplace_back(&saveFilenameType);
 	}
 };
