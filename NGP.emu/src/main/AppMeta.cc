@@ -97,7 +97,7 @@ std::string_view AppMeta::systemKeyCodeToString(KeyCode c)
 		case NgpKey::SP6: return "SP 6";
 		case NgpKey::SP7: return "SP 7";
 		case NgpKey::SP8: return "SP 8 (Super)";
-		case NgpKey::AB: return "A+B";
+		case NgpKey::AB: return "C";
 		case NgpKey::CommNext: return "Commentator";
 		default: return "";
 	}
@@ -224,15 +224,15 @@ SystemInputDeviceDesc AppMeta::inputDeviceDesc(int idx)
 		InputComponentDesc{"D-Pad", dpadKeyInfo, InputComponent::dPad, LB2DO},
 		InputComponentDesc{"Face Buttons", faceKeyInfo, InputComponent::button, RB2DO},
 		InputComponentDesc{"Option", optionKeyInfo, InputComponent::button, RB2DO},
-		/* 화면에는 SP 하나만 얹는다(방향과 조합해 다 쓴다).
-		   SP2~SP6 은 물리 패드에만 남겨 화면을 어지럽히지 않는다. */
-		InputComponentDesc{"SP Button", {&spKeyInfo[0], 1}, InputComponent::button, RB2DO},
-		InputComponentDesc{"A+B", abKeyInfo, InputComponent::button, RB2DO},
+		/* 화면에는 SP 하나만 얹는다 — 기술은 전부 SP+방향으로 나간다. */
+		InputComponentDesc{"SP Button", spKeyInfo, InputComponent::button, RB2DO},
+		/* A+B 동시입력. 격겜 관례대로 C 로 부른다 — 물리 키보드 기본 배치도 이미 C 다. */
+		InputComponentDesc{"C (A+B)", abKeyInfo, InputComponent::button, RB2DO},
 		InputComponentDesc{"Commentator", commKeyInfo, InputComponent::button, RB2DO, {.altConfig = true}},
-		InputComponentDesc{"SP Buttons (all 8)", spKeyInfo, InputComponent::button, RB2DO, {.altConfig = true}},
-		/* 2~4개짜리 묶음 — 화면에 몇 개만 얹고 싶을 때. Add New Button Group 에서 골라 쓴다. */
-		InputComponentDesc{"SP Buttons (2)", {&spKeyInfo[0], 2}, InputComponent::button, RB2DO, {.altConfig = true}},
-		InputComponentDesc{"SP Buttons (4)", {&spKeyInfo[0], 4}, InputComponent::button, RB2DO, {.altConfig = true}},
+		/* SP Buttons (all 8) · (2) · (4) 를 없앴다.
+		   v0.5 에서 spKeyInfo 가 SP1 하나로 줄었는데 이 셋은 그대로 남아 있었다.
+		   {&spKeyInfo[0], 2} 와 {&spKeyInfo[0], 4} 는 **한 칸짜리 배열을 두 칸·네 칸으로 읽는다** —
+		   범위 밖 접근이었다. 고를 수 있는 항목으로 화면에 떠 있었으니 눌리면 무엇이 나올지 모른다. */
 	};
 	static constexpr SystemInputDeviceDesc gamepadDesc{"Gamepad", gamepadComponents};
 	return gamepadDesc;

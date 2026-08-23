@@ -33,9 +33,11 @@ bool NgpSystem::readConfig(ConfigType type, MapIO &io, unsigned key)
 			case CFGKEY_NGPKEY_LANGUAGE: return readOptionValue(io, optionNGPLanguage);
 			case CFGKEY_NO_MD5_FILENAMES: return readOptionValue(io, noMD5InFilenames);
 			case CFGKEY_SS2SP_ENABLED: return readOptionValue(io, ss2spEnabled);
-			case CFGKEY_SS2SP_LAYOUT: return readOptionValue(io, ss2spLayoutSP);
+			/* SP1-8 배치는 없앴다. 옛 설정 파일이 깨지지 않게 읽기만 남긴다. */
+			case CFGKEY_SS2SP_LAYOUT: { bool unused{}; return readOptionValue(io, unused); }
 			case CFGKEY_SS2COMM_ENABLED: return readOptionValue(io, ss2commEnabled);
 			case CFGKEY_SS2COMM_SPK: return readOptionValue(io, ss2commSpeaker);
+			case CFGKEY_SS2COMM_VIBRATE: return readOptionValue(io, ss2commVibrate);
 			/* 표시 방식(알림/띠) 고르기는 없앴다. 해설은 늘 띠에 그린다.
 			   옛 설정 파일에 이 키가 남아 있어도 조용히 넘기려고 읽기만 남겨 둔다. */
 			case CFGKEY_SS2COMM_DRAW: { uint8_t unused{}; return readOptionValue(io, unused); }
@@ -53,9 +55,9 @@ void NgpSystem::writeConfig(ConfigType type, FileIO &io)
 		writeOptionValueIfNotDefault(io, optionNGPLanguage);
 		writeOptionValueIfNotDefault(io, CFGKEY_NO_MD5_FILENAMES, noMD5InFilenames, false);
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2SP_ENABLED, ss2spEnabled, true);
-		writeOptionValueIfNotDefault(io, CFGKEY_SS2SP_LAYOUT, ss2spLayoutSP, true);
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_ENABLED, ss2commEnabled, true);
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_SPK, ss2commSpeaker, uint8_t{});
+		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_VIBRATE, ss2commVibrate, false);
 		{
 			/* 기술 배치 210바이트. 기본값과 같으면 안 쓴다. */
 			Ss2SlotBlob cur{}, def{};

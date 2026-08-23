@@ -78,6 +78,7 @@ enum NgpConfigKey
 	/* SS2 원버튼 */
 	CFGKEY_SS2SP_SLOTS = 271, CFGKEY_SS2SP_ENABLED = 272, CFGKEY_SS2SP_LAYOUT = 273,
 	CFGKEY_SS2COMM_ENABLED = 274, CFGKEY_SS2COMM_SPK = 275, CFGKEY_SS2COMM_DRAW = 276,
+	CFGKEY_SS2COMM_VIBRATE = 277,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -96,10 +97,14 @@ public:
 	/* .emu 계열은 화면 버튼을 많이 못 얹고 핫키도 빈약하다.
 	   그래서 기본을 **SP 하나 + 방향**으로 둔다 — 브라우저 실행기와 같은 감각.
 	   물리 패드를 쓰면 SP2~SP6 이 기술 1~5번으로 그대로 살아 있다. */
-	bool ss2spLayoutSP{true};
+	/* SP1-8 낱개 배치는 없앴다 — 기술은 전부 SP+방향으로 나간다. 고를 것이 없어 상수다. */
+	static constexpr bool ss2spLayoutSP = true;
 	/* SS2 캐릭터 해설 — 화면 하단 알림으로 한 줄씩. 화자 0 하오마루 1 나코루루 2 한조 3 갈포드 */
 	bool ss2commEnabled{true};
 	uint8_t ss2commSpeaker{};
+	/* 큰 장면에서 짧게 울린다. 화면 버튼 햅틱(VController)과는 **완전히 별개**라
+	   버튼 진동을 꺼 둔 채로도 이것만 켤 수 있다. */
+	bool ss2commVibrate{};
 	/* 해설을 어디에 보여 줄까 — 0 알림 줄 / 1 게임 화면 **위**에 띠를 붙여 직접 그린다.
 	   띠 모드는 화자 얼굴까지 나온다. 얼굴은 배포물에 넣지 않고 사용자 롬에서 뽑는다. */
 	/* 게임 160×152 위에 30px 띠를 붙일 수 있게 버퍼를 처음부터 크게 잡아 둔다.

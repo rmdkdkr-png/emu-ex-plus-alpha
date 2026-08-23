@@ -166,15 +166,23 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	EmuEx::runFrame(*this, mdfnGameInfo, taskCtx, video, mSurfacePix, audio, maxAudioFrames);
 	/* ── SS2 캐릭터 해설 ────────────────────────────────────────
 	   프레임을 돌린 뒤 램을 읽어 이벤트를 잡는다(브라우저판·코어판과 같은 엔진).
-	   토스트는 UI 스레드 것이라 여기서 직접 못 띄운다 → runOnMainThread 로 넘긴다.
-	   대사 문자열은 엔진 내부 정적 버퍼라 링 버퍼에 복사해 두고 그 포인터만 넘긴다
-	   (델리게이트 저장 공간이 16바이트라 std::string 은 못 담는다). */
+	   대사는 코어가 띠에 직접 그리므로 여기서는 큐를 한 칸 미는 것과 진동만 한다. */
 	ss2comm_set_enabled(ss2commEnabled);
 	if(ss2commEnabled)
 	{
 		ss2comm_set_speaker(ss2commSpeaker);
 		/* 해설은 코어가 띠에 직접 그린다. 큐는 여기서 한 칸씩 밀어 준다. */
-		ss2comm_frame();
+		if(auto line = ss2comm_frame(); line && ss2commVibrate && ss2comm_impact())
+		{
+			/* 큰 장면에서만 짧게. 화면 버튼 햅틱(VController 32ms)과 다른 경로라
+			   버튼 진동을 꺼 두어도 이것만 울린다. */
+			auto &app = gApp();
+			app.runOnMainThread([&app](ApplicationContext)
+			{
+				if(app.vibrationManager.hasVibrator())
+					app.vibrationManager.vibrate(IG::Milliseconds{40});
+			});
+		}
 	}
 }
 

@@ -242,17 +242,6 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		}
 	};
 
-	BoolMenuItem ss2spLayout
-	{
-		"SS2 Layout", attachParams(),
-		system().ss2spLayoutSP,
-		"Buttons (SP1-8)", "SP + direction",
-		[this](BoolMenuItem &item, View &, Input::Event e)
-		{
-			system().ss2spLayoutSP = item.flipBoolValue(*this);
-		}
-	};
-
 	/* SS2 캐릭터 해설 — 게임 화면 위 띠에 얼굴과 함께 그린다 */
 	BoolMenuItem ss2commEnabled
 	{
@@ -286,6 +275,18 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 	};
 
 
+	/* 큰 장면에 짧게 울린다. 화면 버튼 햅틱과 별개라 버튼 진동은 꺼 둔 채 쓸 수 있다. */
+	BoolMenuItem ss2commVibrate
+	{
+		"SS2 Commentary Vibration", attachParams(),
+		system().ss2commVibrate,
+		"Off", "On",
+		[this](BoolMenuItem &item, View &, Input::Event e)
+		{
+			system().ss2commVibrate = item.flipBoolValue(*this);
+		}
+	};
+
 	TextMenuItem ss2spSlots
 	{
 		"SS2 Move Assignment", attachParams(),
@@ -303,10 +304,10 @@ public:
 		loadStockItems();
 		item.emplace_back(&ngpLanguage);
 		item.emplace_back(&ss2spEnabled);
-		item.emplace_back(&ss2spLayout);
 		item.emplace_back(&ss2spSlots);
 		item.emplace_back(&ss2commEnabled);
 		item.emplace_back(&ss2commSpeaker);
+		item.emplace_back(&ss2commVibrate);
 		item.emplace_back(&saveFilenameType);
 	}
 };
