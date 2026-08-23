@@ -3,7 +3,9 @@
 예전에는 여기에 "APK 직링크가 살아나도록 두 줄을 고치세요" 라고 적혀 있었습니다.
 그 두 줄은 **이 꾸러미의 `.github/workflows/build.yml` 에 이미 들어 있습니다.**
 
-그 파일을 통째로 올리시면(연필 편집으로 갈아 끼우기) 아래가 한꺼번에 됩니다.
+꾸러미 안에 `.github/workflows/build.yml` 로 자리를 잡아 뒀습니다.
+`.github` 폴더째 끌어 놓으시면(숨김 폴더라 안 보이면 탐색기/파인더에서 숨김 항목 켜기)
+아래가 한꺼번에 됩니다.
 
 - 릴리스에 `NgpEmu.apk` 가 붙어 직링크가 산다
   https://github.com/rmdkdkr-png/emu-ex-plus-alpha/releases/download/Pre-release/NgpEmu.apk

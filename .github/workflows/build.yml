@@ -34,7 +34,9 @@ jobs:
           NGP.emu/src/ss2comm/ss2comm.h \
           NGP.emu/src/ss2comm/ss2comm_lines.h \
           NGP.emu/src/ss2comm/ss2comm_font.h \
-          NGP.emu/src/ss2comm/ss2comm_font11.h ; do need "$f"; done
+          NGP.emu/src/ss2comm/ss2comm_font11.h \
+          NGP.emu/src/ss2comm/ss2comm_duo.h \
+          NGP.emu/res/overlays/gpOverlay.png ; do need "$f"; done
 
         has NGP.emu/src/CMakeLists.txt        'ss2sp/ss2sp.c'
         has NGP.emu/src/CMakeLists.txt        'ss2comm/ss2comm.c'
@@ -46,12 +48,22 @@ jobs:
         has NGP.emu/src/main/Main.cc          'videoAspectRatioScale'
         has NGP.emu/src/main/options.cc       'CFGKEY_SS2COMM_DRAW'
         has NGP.emu/src/main/EmuMenuViews.cc  'ss2commDraw'
+        # v0.7 — 해설자 15명 · 교대 버튼
+        has NGP.emu/src/ss2comm/ss2comm_lines.h 'SS2COMM_SPK_N 15'
+        has NGP.emu/src/ss2comm/ss2comm.c       'ss2comm_next_speaker'
+        has NGP.emu/src/ss2comm/ss2comm.c       'flow_arc'
+        has NGP.emu/src/ss2comm/ss2comm.c       'duo_after'
+        has NGP.emu/src/ss2comm/ss2comm_duo.h   'DUOLINE'
+        has NGP.emu/src/ss2comm/ss2comm.h       'ss2comm_speaker_count'
+        has NGP.emu/src/main/system.ccm         'CommNext'
+        has NGP.emu/src/main/AppMeta.cc         'commKeyInfo'
+        has NGP.emu/src/main/EmuMenuViews.cc    'ss2comm_speaker_name'
 
         if [ "$miss" != 0 ]; then
-          echo "::error::SS2 파일이 모자라거나 짝이 안 맞습니다. upload/3_ngpemu 의 NGP.emu 폴더를 통째로 다시 올리세요."
+          echo "::error::SS2 파일이 모자라거나 짝이 안 맞습니다. 3_ngpemu 의 NGP.emu 폴더를 통째로 다시 올리세요."
           exit 1
         fi
-        echo "✅ SS2 파일 14개 · 짝 다 맞음 — 빌드로 넘어갑니다"
+        echo "✅ SS2 파일 16개 · 짝 다 맞음 (v0.7 해설자 15명 · 흐름 · 짝꿍) — 빌드로 넘어갑니다"
 
   # ── 1) 밑작업 (NDK·imagine·EmuFramework) ──────────────────────────
   # imagine / EmuFramework 가 그대로면 지난번 캐시를 그냥 쓴다.
