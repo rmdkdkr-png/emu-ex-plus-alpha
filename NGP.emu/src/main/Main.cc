@@ -92,7 +92,7 @@ void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 
 void NgpSystem::ss2SyncSurface()
 {
-	/* 띠는 화면 **위**에 붙는다. 그래서 게임은 버퍼의 30줄 아래부터 그려지게 한다 —
+	/* 띠는 화면 **위**에 붙는다. 그래서 게임은 버퍼의 32줄 아래부터 그려지게 한다 —
 	   코어판처럼 매 프레임 그림을 memmove 로 밀 필요가 없다. */
 	mSurfacePix = mFullPix.subView({0, ss2BandOn() ? ss2BandH : 0}, {ss2GameW, ss2GameH});
 }
@@ -107,7 +107,7 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 	}
 	else
 	{
-		/* 화면이 32비트다. 엔진은 RGB565 만 그리므로 따로 그린 뒤 띠 30줄만 변환해 얹는다. */
+		/* 화면이 32비트다. 엔진은 RGB565 만 그리므로 따로 그린 뒤 띠 32줄만 변환해 얹는다. */
 		ss2comm_draw(ss2BandScratch, ss2GameW, ss2GameW, ss2GameH);
 		IG::PixmapView band{{{ss2GameW, ss2BandH}, IG::PixelFmtRGB565}, ss2BandScratch};
 		mFullPix.subView({0, 0}, {ss2GameW, ss2BandH}).writeConverted(band);
