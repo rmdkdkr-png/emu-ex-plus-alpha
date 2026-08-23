@@ -265,13 +265,18 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		}
 	};
 
-	TextMenuItem ss2commSpeakerItem[4]
+	/* v0.7: 해설자가 15명이다. 이름은 엔진(ss2comm)이 들고 있으므로 여기서 받아 만든다 —
+	   대사표를 늘려도 이 파일은 안 고쳐도 된다. */
+	std::vector<TextMenuItem> ss2commSpeakerItem = [this]
 	{
-		{"Haohmaru", attachParams(), [this](){ system().ss2commSpeaker = 0; }},
-		{"Nakoruru", attachParams(), [this](){ system().ss2commSpeaker = 1; }},
-		{"Hanzo",    attachParams(), [this](){ system().ss2commSpeaker = 2; }},
-		{"Galford",  attachParams(), [this](){ system().ss2commSpeaker = 3; }},
-	};
+		std::vector<TextMenuItem> v;
+		const int n = ss2comm_speaker_count();
+		v.reserve(n);
+		for(int i = 0; i < n; i++)
+			v.emplace_back(ss2comm_speaker_name(i), attachParams(),
+				[this, i](){ system().ss2commSpeaker = (uint8_t)i; });
+		return v;
+	}();
 
 	MultiChoiceMenuItem ss2commSpeaker
 	{

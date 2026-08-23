@@ -115,7 +115,23 @@ static int rd(int off){ return RAM[off]; }
 static int rd16(int off){ return RAM[off] | (RAM[off+1]<<8); }
 
 void ss2comm_set_enabled(int on){ cm_on = on ? 1 : 0; }
-void ss2comm_set_speaker(int idx){ if(idx>=0 && idx<4) cm_spk = idx; }
+void ss2comm_set_speaker(int idx){ if(idx>=0 && idx<SS2COMM_SPK_N) cm_spk = idx; }
+/* v0.7: 해설자가 15명이 되면서 프런트엔드가 이름·수를 알아야 한다.
+   버튼 하나로 교대하는 길도 여기서 연다 — 코어·앱이 같은 순서를 쓴다. */
+int ss2comm_speaker_count(void){ return SS2COMM_SPK_N; }
+const char *ss2comm_speaker_name(int idx){
+  return (idx>=0 && idx<SS2COMM_SPK_N) ? SPK_NAME[idx] : "";
+}
+int ss2comm_get_speaker(void){ return cm_spk; }
+/* 다음 해설자로 넘기고 그 사람 번호를 돌려준다. 인사 한마디는 프런트엔드가 띄운다. */
+int ss2comm_next_speaker(int step){
+  int n = SS2COMM_SPK_N;
+  cm_spk = ((cm_spk + (step?step:1)) % n + n) % n;
+  return cm_spk;
+}
+const char *ss2comm_speaker_hello(int idx){
+  return (idx>=0 && idx<SS2COMM_SPK_N) ? HELLO[idx] : "";
+}
 void ss2comm_reset(void){
   int i; for(i=0;i<CK_N;i++) cd[i]=0;
   p_mode=p_scr=-1; p_hp1=p_hp2=-1; p_a1=p_a2=0; p_surv=p_stage=0;
@@ -481,12 +497,15 @@ static const unsigned char EVMOOD[EV_N] = {
   /* DOUBLELOW LONGFIGHT */                                 1,0,
   /* HIT TAKEN DOWN DOWNED OPPSP */                         1,2,1,2,2,
   /* MOVE MOVEHIT MOVEDOWN MOVEKO */                        1,1,1,1,
-  /* REVENGE STREAK RECORD WINSCR LOSESCR REL LORE */       1,1,0,1,2,0,0
+  /* REVENGE STREAK RECORD WINSCR LOSESCR REL LORE */       1,1,0,1,2,0,0,
+  /* v0.7 흐름: FLOWSAME TRADE ONE CHASE SP */              0,1,1,2,0,
+  /* v0.7 총평: SWEEP SWEPT COMEBACK SWEAT CHOKE SLIP */    1,2,1,1,2,2
 };
 static const unsigned char EVHIT[EV_N] = {
   0,0,1,0,1,1,1,1,   0,0,1,0,0,   1,0,1,0,1,   0,0,0,0,
   0,0,0,0,           0,0,0,0,     0,0,0,1,     1,0,
-  0,0,0,0,0,         1,0,0,1,     1,1,0,0,0,0,0
+  0,0,0,0,0,         1,0,0,1,     1,1,0,0,0,0,0,
+  0,0,0,0,0,         1,0,1,1,0,0
 };
 
 /* ── 초상 (얼굴) ──────────────────────────────────────────────────
@@ -495,17 +514,13 @@ static const unsigned char EVHIT[EV_N] = {
    그림은 사용자 롬에서 그 자리에서 그린다(게임 그림은 어디에도 넣지 않는다).
    sum = 64바이트 단순합. 다른 버전 롬이면 초상은 조용히 생략한다. */
 typedef struct { unsigned off; unsigned short pal[4]; unsigned short sum; } ss2face;
-static const ss2face FACE_ROM[4] = {          /* 화자 순서: 하오마루·나코루루·한조·갈포드 */
-  { 388903, {0x0000,0x0BDF,0x0865,0x0024}, 12253 },
-  { 389671, {0x0000,0x0CDF,0x043F,0x0224}, 13246 },
-  { 389543, {0x0000,0x00AF,0x0653,0x0210}, 11994 },
-  { 388711, {0x0000,0x0BDF,0x00FF,0x0410}, 11724 }
-};
+/* 표는 ss2comm_lines.h 가 만든다 (브라우저판 FACE_ROM 을 화자 순서로 옮긴 것) */
+static const ss2face FACE_ROM[SS2COMM_SPK_N] = SS2COMM_FACE_ROM_INIT;
 static const unsigned char *cm_rom = 0;
 static unsigned cm_romlen = 0;
-static uint16_t face_px[4][256];
-static unsigned char face_a[4][256];          /* 0 = 투명(색인 0) */
-static unsigned char face_ok[4];
+static uint16_t face_px[SS2COMM_SPK_N][256];
+static unsigned char face_a[SS2COMM_SPK_N][256];   /* 0 = 투명(색인 0) */
+static unsigned char face_ok[SS2COMM_SPK_N];
 static int face_built = 0;
 
 void ss2comm_set_rom(const void *rom, unsigned len){
@@ -521,8 +536,9 @@ static void build_faces(void){
   face_built = 1;
   memset(face_ok, 0, sizeof(face_ok));
   if(!cm_rom) return;
-  for(i=0;i<4;i++){
+  for(i=0;i<SS2COMM_SPK_N;i++){
     unsigned off = FACE_ROM[i].off, sum = 0; int j;
+    if(!off) continue;                        /* 오프셋을 아직 못 뜬 화자 — 얼굴 없이 글자만 */
     if(off + 64 > cm_romlen) continue;
     for(j=0;j<64;j++) sum = (sum + cm_rom[off+j]) & 0xFFFF;
     if(sum != FACE_ROM[i].sum) continue;      /* 다른 롬 — 이 얼굴은 생략 */

@@ -61,6 +61,10 @@ export enum class NgpKey: KeyCode
 	/* A+B 동시입력 = 분노 폭발. 손가락 두 개로 정확히 같은 프레임에 누르기가 어려워서
 	   버튼 하나로 만든다. 엔진과 무관하게 패드 비트 두 개(A 0x10 / B 0x20)를 같이 켤 뿐이다. */
 	AB = 16,
+	/* v0.7: 해설자 교대. 버튼 하나로 다음 사람에게 넘긴다 —
+	   설정 메뉴를 열지 않고 판 중에 바꾸려는 것이다(브라우저판은 해설창 얼굴을 누른다).
+	   실기 패드로 가지 않는 가상 키라 패드 바이트를 건드리지 않는다. */
+	CommNext = 17,
 };
 
 /* 엔진 선언은 ss2sp/ss2sp.h (global module fragment 에서 include) */
@@ -149,8 +153,18 @@ public:
 		MDFN_IEN_NGP::storeB(0x6F82, 0);
 	}
 
-	void handleInputAction(EmuApp*, InputAction a)
+	void handleInputAction(EmuApp *appPtr, InputAction a)
 	{
+		if(a.code == KeyCode(NgpKey::CommNext))
+		{
+			if(a.state != Input::Action::PUSHED)
+				return;
+			ss2commSpeaker = (uint8_t)ss2comm_next_speaker(1);
+			if(appPtr)
+				appPtr->postMessage(2, false, std::string{ss2comm_speaker_name(ss2commSpeaker)}
+					+ " — " + ss2comm_speaker_hello(ss2commSpeaker));
+			return;
+		}
 		if(a.code == KeyCode(NgpKey::AB))
 		{
 			/* A(비트4) + B(비트5)를 한 번에 */

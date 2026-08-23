@@ -63,7 +63,11 @@ constexpr auto spKeyInfo = makeArray<KeyInfo>
    **뒤를 잡고 누르면 비오의**가 나간다(엔진이 처리). */
 constexpr auto abKeyInfo = makeArray<KeyInfo>(NgpKey::AB);
 
-constexpr auto gpKeyInfo = concatToArrayNow<dpadKeyInfo, optionKeyInfo, faceKeyInfo, turboFaceKeyInfo, spKeyInfo, abKeyInfo>;
+/* v0.7: 해설자 교대 버튼. 누를 때마다 다음 사람에게 넘어간다(15명 순환).
+   설정 메뉴를 열지 않고 판 중에 바꾸려는 것 — 브라우저판의 「해설창 얼굴 누르기」와 같은 자리다. */
+constexpr auto commKeyInfo = makeArray<KeyInfo>(NgpKey::CommNext);
+
+constexpr auto gpKeyInfo = concatToArrayNow<dpadKeyInfo, optionKeyInfo, faceKeyInfo, turboFaceKeyInfo, spKeyInfo, abKeyInfo, commKeyInfo>;
 
 std::span<const KeyCategory> AppMeta::keyCategories()
 {
@@ -94,6 +98,7 @@ std::string_view AppMeta::systemKeyCodeToString(KeyCode c)
 		case NgpKey::SP7: return "SP 7";
 		case NgpKey::SP8: return "SP 8 (Super)";
 		case NgpKey::AB: return "A+B";
+		case NgpKey::CommNext: return "Commentator";
 		default: return "";
 	}
 }
@@ -186,7 +191,9 @@ AssetDesc AppMeta::vControllerAssetDesc(KeyInfo key)
 		sp6{AssetFileID::gamepadOverlay, gpImageCoords({{2, 6}, {2, 2}})},
 		sp7{AssetFileID::gamepadOverlay, gpImageCoords({{4, 6}, {2, 2}})},
 		sp8{AssetFileID::gamepadOverlay, gpImageCoords({{6, 6}, {2, 2}})},
-		ab {AssetFileID::gamepadOverlay, gpImageCoords({{0, 8}, {2, 2}})};
+		ab {AssetFileID::gamepadOverlay, gpImageCoords({{0, 8}, {2, 2}})},
+		/* 말풍선 = 해설자 교대 (res/overlays/gpOverlay.png 의 빈 자리에 새로 그렸다) */
+		commNext{AssetFileID::gamepadOverlay, gpImageCoords({{2, 8}, {2, 2}})};
 	} virtualControllerAssets;
 
 	if(key[0] == 0)
@@ -205,6 +212,7 @@ AssetDesc AppMeta::vControllerAssetDesc(KeyInfo key)
 		case NgpKey::SP7: return virtualControllerAssets.sp7;
 		case NgpKey::SP8: return virtualControllerAssets.sp8;
 		case NgpKey::AB:  return virtualControllerAssets.ab;
+		case NgpKey::CommNext: return virtualControllerAssets.commNext;
 		default: return virtualControllerAssets.blank;
 	}
 }
@@ -220,6 +228,7 @@ SystemInputDeviceDesc AppMeta::inputDeviceDesc(int idx)
 		   SP2~SP6 은 물리 패드에만 남겨 화면을 어지럽히지 않는다. */
 		InputComponentDesc{"SP Button", {&spKeyInfo[0], 1}, InputComponent::button, RB2DO},
 		InputComponentDesc{"A+B", abKeyInfo, InputComponent::button, RB2DO},
+		InputComponentDesc{"Commentator", commKeyInfo, InputComponent::button, RB2DO, {.altConfig = true}},
 		InputComponentDesc{"SP Buttons (all 8)", spKeyInfo, InputComponent::button, RB2DO, {.altConfig = true}},
 		/* 2~4개짜리 묶음 — 화면에 몇 개만 얹고 싶을 때. Add New Button Group 에서 골라 쓴다. */
 		InputComponentDesc{"SP Buttons (2)", {&spKeyInfo[0], 2}, InputComponent::button, RB2DO, {.altConfig = true}},
