@@ -102,7 +102,6 @@ public:
 	uint8_t ss2commSpeaker{};
 	/* 해설을 어디에 보여 줄까 — 0 알림 줄 / 1 게임 화면 **위**에 띠를 붙여 직접 그린다.
 	   띠 모드는 화자 얼굴까지 나온다. 얼굴은 배포물에 넣지 않고 사용자 롬에서 뽑는다. */
-	uint8_t ss2commDraw{};
 	/* 게임 160×152 위에 30px 띠를 붙일 수 있게 버퍼를 처음부터 크게 잡아 둔다.
 	   띠를 끄면 아래 152줄만 커밋하므로 화면은 원래대로 돌아간다. */
 	static constexpr int ss2GameW = 160, ss2GameH = 152, ss2BandH = 30;
@@ -138,7 +137,7 @@ public:
 	/* 띠를 켜면 세로가 30줄 늘어난다 — 화면비를 그만큼 되돌린다.
 	   PCE.emu 가 보이는 줄 수를 바꿀 때 쓰는 것과 같은 자리다. */
 	double videoAspectRatioScale() const;
-	bool ss2BandOn() const { return ss2commEnabled && ss2commDraw; }
+	bool ss2BandOn() const { return ss2commEnabled; }
 	void ss2SyncSurface();              /* 게임이 그려질 자리를 띠 유무에 맞춘다 */
 	MutablePixmapView ss2CommitPix();   /* 띠를 그리고, 화면에 올릴 그림을 돌려준다 */
 	void writeConfig(ConfigType, FileIO&);
@@ -160,9 +159,13 @@ public:
 			if(a.state != Input::Action::PUSHED)
 				return;
 			ss2commSpeaker = (uint8_t)ss2comm_next_speaker(1);
-			if(appPtr)
-				appPtr->postMessage(2, false, std::string{ss2comm_speaker_name(ss2commSpeaker)}
-					+ " — " + ss2comm_speaker_hello(ss2commSpeaker));
+			/* 바뀐 해설자는 해설 띠에 그대로 알린다 — 토스트를 쓰면 같은 말이 두 군데 뜬다. */
+			{
+				char buf[160];
+				std::snprintf(buf, sizeof buf, "%s \u2014 %s",
+					ss2comm_speaker_name(ss2commSpeaker), ss2comm_speaker_hello(ss2commSpeaker));
+				ss2comm_notify(buf);
+			}
 			return;
 		}
 		if(a.code == KeyCode(NgpKey::AB))

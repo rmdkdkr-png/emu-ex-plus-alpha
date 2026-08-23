@@ -41,13 +41,11 @@ jobs:
         has NGP.emu/src/CMakeLists.txt        'ss2sp/ss2sp.c'
         has NGP.emu/src/CMakeLists.txt        'ss2comm/ss2comm.c'
         has NGP.emu/src/main/system.ccm       'ss2commEnabled'
-        has NGP.emu/src/main/system.ccm       'ss2commDraw'
         has NGP.emu/src/main/system.ccm       'ss2CommitPix'
         has NGP.emu/src/main/Main.cc          'ss2CommitPix'
         has NGP.emu/src/main/Main.cc          'ss2comm_draw_enable'
         has NGP.emu/src/main/Main.cc          'videoAspectRatioScale'
         has NGP.emu/src/main/options.cc       'CFGKEY_SS2COMM_DRAW'
-        has NGP.emu/src/main/EmuMenuViews.cc  'ss2commDraw'
         # v0.7 — 해설자 15명 · 교대 버튼
         has NGP.emu/src/ss2comm/ss2comm_lines.h 'SS2COMM_SPK_N 15'
         has NGP.emu/src/ss2comm/ss2comm.c       'ss2comm_next_speaker'

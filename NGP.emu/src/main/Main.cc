@@ -160,7 +160,7 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 		}
 	}
 	/* 띠 설정을 프레임 돌리기 **전에** 반영한다 — 게임이 그려질 자리가 여기서 정해진다.
-	   4 = 화면 밖 위 띠 (코어판과 같은 모드). 0 = 안 그림(알림 줄로 간다). */
+	   4 = 화면 밖 위 띠 (코어판과 같은 모드). 해설을 켜면 늘 코어가 직접 그린다. */
 	ss2comm_draw_enable(ss2BandOn() ? 4 : 0);
 	ss2SyncSurface();
 	EmuEx::runFrame(*this, mdfnGameInfo, taskCtx, video, mSurfacePix, audio, maxAudioFrames);
@@ -173,19 +173,8 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	if(ss2commEnabled)
 	{
 		ss2comm_set_speaker(ss2commSpeaker);
-		/* 띠를 켜면 코어가 직접 그리므로 알림은 띄우지 않는다 — 같은 줄이 두 번 나오면 지저분하다. */
-		if(auto line = ss2comm_frame(); line && !ss2comm_drawing())
-		{
-			static std::array<std::array<char, 160>, 4> ring{};
-			static unsigned ringPos{};
-			auto &slot = ring[ringPos++ & 3];
-			std::snprintf(slot.data(), slot.size(), "%s", line);
-			auto &app = gApp();
-			app.runOnMainThread([&app, msg = slot.data()](ApplicationContext)
-			{
-				app.postMessage(2, false, msg);
-			});
-		}
+		/* 해설은 코어가 띠에 직접 그린다. 큐는 여기서 한 칸씩 밀어 준다. */
+		ss2comm_frame();
 	}
 }
 
