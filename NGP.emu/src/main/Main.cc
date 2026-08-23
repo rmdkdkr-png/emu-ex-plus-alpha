@@ -92,9 +92,9 @@ void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 
 void NgpSystem::ss2SyncSurface()
 {
-	/* 띠는 화면 **위**에 붙는다. 그래서 게임은 버퍼의 32줄 아래부터 그려지게 한다 —
+	/* 띠는 화면 **위**에 붙는다. 그래서 게임은 버퍼의 64줄 아래부터(해설 32 + 심판 32) 그려지게 한다 —
 	   코어판처럼 매 프레임 그림을 memmove 로 밀 필요가 없다. */
-	mSurfacePix = mFullPix.subView({0, ss2BandOn() ? ss2BandH : 0}, {ss2GameW, ss2GameH});
+	mSurfacePix = mFullPix.subView({0, ss2BandOn() ? (ss2BandH + ss2RefH) : 0}, {ss2GameW, ss2GameH});
 }
 
 IG::MutablePixmapView NgpSystem::ss2CommitPix()
@@ -107,14 +107,11 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 	}
 	else
 	{
-		/* 화면이 32비트다. 엔진은 RGB565 만 그리므로 따로 그린 뒤
-		   **위 띠와 아래 심판 칸** 두 군데만 변환해 얹는다. */
+		/* 화면이 32비트다. 엔진은 RGB565 만 그리므로 따로 그린 뒤 얹는다.
+		   해설창과 심판 칸은 **맨 위에 나란히 붙어 있으므로** 한 번에 변환한다. */
 		ss2comm_draw(ss2BandScratch, ss2GameW, ss2GameW, ss2GameH);
-		IG::PixmapView band{{{ss2GameW, ss2BandH}, IG::PixelFmtRGB565}, ss2BandScratch};
-		mFullPix.subView({0, 0}, {ss2GameW, ss2BandH}).writeConverted(band);
-		IG::PixmapView ref{{{ss2GameW, ss2RefH}, IG::PixelFmtRGB565},
-		                   ss2BandScratch + ss2GameW * (ss2BandH + ss2GameH)};
-		mFullPix.subView({0, ss2BandH + ss2GameH}, {ss2GameW, ss2RefH}).writeConverted(ref);
+		IG::PixmapView band{{{ss2GameW, ss2BandH + ss2RefH}, IG::PixelFmtRGB565}, ss2BandScratch};
+		mFullPix.subView({0, 0}, {ss2GameW, ss2BandH + ss2RefH}).writeConverted(band);
 	}
 	return mFullPix;
 }

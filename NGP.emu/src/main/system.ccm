@@ -167,13 +167,10 @@ public:
 			if(a.state != Input::Action::PUSHED)
 				return;
 			ss2commSpeaker = (uint8_t)ss2comm_next_speaker(1);
-			/* 바뀐 해설자는 해설 띠에 그대로 알린다 — 토스트를 쓰면 같은 말이 두 군데 뜬다. */
-			{
-				char buf[160];
-				std::snprintf(buf, sizeof buf, "%s \u2014 %s",
-					ss2comm_speaker_name(ss2commSpeaker), ss2comm_speaker_hello(ss2commSpeaker));
-				ss2comm_notify(buf);
-			}
+			/* 바뀐 해설자는 해설 띠에 그대로 알린다 — 토스트를 쓰면 같은 말이 두 군데 뜬다.
+			   이름을 앞에 덧붙이지 않는다. 소개 대사가 이미 제 이름을 말하고 있어서
+			   「겐주로 — 키바가미 겐주로다…」처럼 두 번 나왔다. 초상도 같이 뜬다. */
+			ss2comm_notify(ss2comm_speaker_hello(ss2commSpeaker));
 			return;
 		}
 		if(a.code == KeyCode(NgpKey::AB))
