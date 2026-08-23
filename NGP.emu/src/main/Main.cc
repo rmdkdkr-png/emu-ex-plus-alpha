@@ -107,17 +107,21 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 	}
 	else
 	{
-		/* 화면이 32비트다. 엔진은 RGB565 만 그리므로 따로 그린 뒤 띠 32줄만 변환해 얹는다. */
+		/* 화면이 32비트다. 엔진은 RGB565 만 그리므로 따로 그린 뒤
+		   **위 띠와 아래 심판 칸** 두 군데만 변환해 얹는다. */
 		ss2comm_draw(ss2BandScratch, ss2GameW, ss2GameW, ss2GameH);
 		IG::PixmapView band{{{ss2GameW, ss2BandH}, IG::PixelFmtRGB565}, ss2BandScratch};
 		mFullPix.subView({0, 0}, {ss2GameW, ss2BandH}).writeConverted(band);
+		IG::PixmapView ref{{{ss2GameW, ss2RefH}, IG::PixelFmtRGB565},
+		                   ss2BandScratch + ss2GameW * (ss2BandH + ss2GameH)};
+		mFullPix.subView({0, ss2BandH + ss2GameH}, {ss2GameW, ss2RefH}).writeConverted(ref);
 	}
 	return mFullPix;
 }
 
 double NgpSystem::videoAspectRatioScale() const
 {
-	return ss2BandOn() ? double(ss2GameH) / double(ss2GameH + ss2BandH) : 1.;
+	return ss2BandOn() ? double(ss2GameH) / double(ss2GameH + ss2BandH + ss2RefH) : 1.;
 }
 
 bool NgpSystem::onVideoRenderFormatChange(EmuVideo &, PixelFormat fmt)
