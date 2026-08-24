@@ -149,7 +149,7 @@ public:
 	   PCE.emu 가 보이는 줄 수를 바꿀 때 쓰는 것과 같은 자리다. */
 	double videoAspectRatioScale() const;
 	bool ss2BandOn() const { return ss2commEnabled || ss2commRef; }   /* 어느 쪽이든 켜면 띠가 선다 */
-	bool ss2SidesOn() const { return ss2commSides && ss2BandOn(); }   /* 기둥은 엔진이 살아 있을 때만 */
+	bool ss2SidesOn() const { return ss2commSides; }   /* 기둥은 챗/심판과 독립 — 꺼도 대진 추적은 돈다 */
 	void ss2SyncSurface();              /* 게임이 그려질 자리를 띠 유무에 맞춘다 */
 	MutablePixmapView ss2CommitPix();   /* 띠를 그리고, 화면에 올릴 그림을 돌려준다 */
 	void writeConfig(ConfigType, FileIO&);

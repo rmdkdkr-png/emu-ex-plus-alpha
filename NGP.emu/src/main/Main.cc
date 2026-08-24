@@ -100,14 +100,15 @@ void NgpSystem::ss2SyncSurface()
 
 IG::MutablePixmapView NgpSystem::ss2CommitPix()
 {
-	if(!ss2BandOn())
-		return mSurfacePix;                 /* 띠 없음 — 게임 화면만 올린다 */
 	bool sides = ss2SidesOn();
-	int totalH = ss2GameH + ss2BandH;
+	if(!ss2BandOn() && !sides)
+		return mSurfacePix;                 /* 띠도 기둥도 없음 — 게임 화면만 올린다 */
+	int totalH = ss2GameH + (ss2BandOn() ? ss2BandH : 0);   /* 띠 없이 기둥만도 된다 */
 	if(mFullPix.format().bytesPerPixel() == 2)
 	{
 		auto fb = reinterpret_cast<uint16_t*>(mFullPix.data());
-		ss2comm_draw(fb + ss2SideW, mFullPix.pitchPx(), ss2GameW, ss2GameH);
+		if(ss2BandOn())
+			ss2comm_draw(fb + ss2SideW, mFullPix.pitchPx(), ss2GameW, ss2GameH);
 		if(sides)
 		{
 			/* 양옆 아트웍 기둥 — 그림은 엔진이 사용자 롬에서 굽는다 */
@@ -121,14 +122,17 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 		   해설창은 맨 위 32줄. 심판 오버레이는 게임 자리 **맨 위** 32줄(해설창 바로 아래)인데,
 		   엔진이 이번 프레임에 실제로 그렸을 때만 그 부분을 덧변환한다 —
 		   안 그린 프레임에 변환하면 게임 그림이 검은 상자로 덮인다. */
-		ss2comm_draw(ss2BandScratch, ss2GameW, ss2GameW, ss2GameH);
-		IG::PixmapView band{{{ss2GameW, ss2BandH}, IG::PixelFmtRGB565}, ss2BandScratch};
-		mFullPix.subView({ss2SideW, 0}, {ss2GameW, ss2BandH}).writeConverted(band);
-		if(int refH = ss2comm_ref_overlay())
+		if(ss2BandOn())
 		{
-			int top = ss2BandH;   /* 게임 자리의 첫 줄부터 — 엔진과 같은 자리 */
-			IG::PixmapView ref{{{ss2GameW, refH}, IG::PixelFmtRGB565}, ss2BandScratch + top * ss2GameW};
-			mFullPix.subView({ss2SideW, top}, {ss2GameW, refH}).writeConverted(ref);
+			ss2comm_draw(ss2BandScratch, ss2GameW, ss2GameW, ss2GameH);
+			IG::PixmapView band{{{ss2GameW, ss2BandH}, IG::PixelFmtRGB565}, ss2BandScratch};
+			mFullPix.subView({ss2SideW, 0}, {ss2GameW, ss2BandH}).writeConverted(band);
+			if(int refH = ss2comm_ref_overlay())
+			{
+				int top = ss2BandH;   /* 게임 자리의 첫 줄부터 — 엔진과 같은 자리 */
+				IG::PixmapView ref{{{ss2GameW, refH}, IG::PixelFmtRGB565}, ss2BandScratch + top * ss2GameW};
+				mFullPix.subView({ss2SideW, top}, {ss2GameW, refH}).writeConverted(ref);
+			}
 		}
 		if(sides)
 		{
@@ -140,7 +144,10 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 			}
 		}
 	}
-	return sides ? mFullPix : mFullPix.subView({ss2SideW, 0}, {ss2GameW, totalH});
+	if(sides)
+		return ss2BandOn() ? IG::MutablePixmapView{mFullPix}
+		                   : mFullPix.subView({0, 0}, {ss2GameW + 2*ss2SideW, ss2GameH});
+	return mFullPix.subView({ss2SideW, 0}, {ss2GameW, totalH});
 }
 
 double NgpSystem::videoAspectRatioScale() const
@@ -197,8 +204,8 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	/* ── SS2 캐릭터 해설 ────────────────────────────────────────
 	   프레임을 돌린 뒤 램을 읽어 이벤트를 잡는다(브라우저판·코어판과 같은 엔진).
 	   대사는 코어가 띠에 직접 그리므로 여기서는 큐를 한 칸 미는 것과 진동만 한다. */
-	ss2comm_set_enabled(ss2commEnabled || ss2commRef);
-	if(ss2commEnabled || ss2commRef)
+	ss2comm_set_enabled(ss2commEnabled || ss2commRef || ss2commSides);
+	if(ss2commEnabled || ss2commRef || ss2commSides)
 	{
 		ss2comm_set_speaker(ss2commSpeaker);
 		ss2comm_set_ref(ss2commRef);
