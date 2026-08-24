@@ -182,7 +182,11 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	{
 		ss2comm_set_speaker(ss2commSpeaker);
 		/* 해설은 코어가 띠에 직접 그린다. 큐는 여기서 한 칸씩 밀어 준다. */
-		if(auto line = ss2comm_frame(); line && ss2commVibrate && ss2comm_impact())
+		auto line = ss2comm_frame();
+		/* 진동 두 갈래: 해설창 강조줄(금빛) + 심판 구령(승부!·한 판! — 「쿵」).
+		   thump 는 읽어야 지워지므로 진동을 꺼 두었어도 매 프레임 비워 준다. */
+		int thump = ss2comm_thump();
+		if(ss2commVibrate && ((line && ss2comm_impact()) || thump))
 		{
 			/* 큰 장면에서만 짧게. 화면 버튼 햅틱(VController 32ms)과 다른 경로라
 			   버튼 진동을 꺼 두어도 이것만 울린다. */
