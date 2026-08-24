@@ -109,16 +109,16 @@ public:
 	   띠 모드는 화자 얼굴까지 나온다. 얼굴은 배포물에 넣지 않고 사용자 롬에서 뽑는다. */
 	/* 게임 160×152 위에 32px 띠를 붙일 수 있게 버퍼를 처음부터 크게 잡아 둔다.
 	   띠를 끄면 아래 152줄만 커밋하므로 화면은 원래대로 돌아간다. */
-	/* 위 32줄 = 해설 띠, 아래 32줄 = **심판 칸**. 둘을 나눠 두면 서로 밀어내지 않는다 —
-	   구호가 떠 있는 동안에도 위에서는 해설이 제 말을 이어 간다.
-	   32 인 이유는 쿠로코 초상이 32x32(선택 화면 아이콘)뿐이기 때문이다. */
+	/* 위 32줄 = 해설 띠. 심판(쿠로코)은 제 칸이 없다 — 게임 화면 맨 아래 32줄에
+	   **오버레이**로 얹힌다(대사가 서 있는 동안만). 32 인 이유는 쿠로코 초상이
+	   32x32(선택 화면 아이콘)뿐이기 때문이다. */
 	static constexpr int ss2GameW = 160, ss2GameH = 152, ss2BandH = 32, ss2RefH = 32;
 	MutablePixmapView mSurfacePix;   /* 게임이 그려지는 자리 (띠를 켜면 32줄 아래) */
 	MutablePixmapView mFullPix;      /* 띠까지 포함한 버퍼 전체 */
-	static constexpr WSize vidBufferPx{ss2GameW, ss2GameH + ss2BandH + ss2RefH};
+	static constexpr WSize vidBufferPx{ss2GameW, ss2GameH + ss2BandH};
 	alignas(8) uint32_t pixBuff[vidBufferPx.x * vidBufferPx.y]{};
 	/* ss2comm_draw() 는 RGB565 전용이다. 화면이 32비트로 돌 때는 여기 그린 뒤 변환해 얹는다. */
-	uint16_t ss2BandScratch[ss2GameW * (ss2GameH + ss2BandH + ss2RefH)]{};
+	uint16_t ss2BandScratch[ss2GameW * (ss2GameH + ss2BandH)]{};
 	bool noMD5InFilenames{};
 	// TODO: Mednafen/Neopop timing is based on 199 lines/frame, verify if this is correct
 	static constexpr FrameRate ngpFrameRate{6144000. / (199. * 515.)}; //~59.95Hz

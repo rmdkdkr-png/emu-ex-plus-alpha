@@ -202,6 +202,7 @@ static unsigned q_next;
 static unsigned char anec_at[15], weap_at[15];  /* 썰·무기 소회를 어디까지 풀었나 */
 static unsigned ref_next;                       /* 심판끼리의 최소 간격 */
 static unsigned char ref_pend_round;            /* 새 매치 구호 — 전투 화면이 설 때 낸다 */
+static char pend_rel[160];                      /* 첫 관계 대사도 같이 미룬다 — VS 에서 소모되면 판에서는 안 보인다 */
 static unsigned ref_shown;                      /* 아래 칸에 세운 시각 (0 = 아직) */
 static char     ref_text[160];
 static unsigned ref_at;
@@ -330,7 +331,7 @@ void ss2comm_reset(void){
   st_won=st_lost=st_resultDone=0;
   st_myR=st_opR=0; st_roundN=1; st_fb=st_longSaid=st_dblLow=0;
   memset(anec_at,0,sizeof anec_at); memset(weap_at,0,sizeof weap_at);
-  ref_next=0; ref_pend_round=0;
+  ref_next=0; ref_pend_round=0; pend_rel[0]=0;
   st_lastStage=-1; st_roundStart=st_offAt=st_actAt=st_menuAt=st_selChatAt=st_hitAt=0;
   st_selChatN=0; st_myChar=st_oppChar=-1;
   curline[0]=0; cur_f=0; cur_ev=-1; cur_spk=cm_spk;
@@ -717,7 +718,15 @@ const char *ss2comm_frame(void){
 
   /* ── 전투측 화면 전환: 문구(VS) 화면 · 승패 결과 이름 화면 · 스토리 사담 ── */
   if(mode==MD_BATTLE && scr!=p_scr){
-    if(scr>=8 && p_scr<8 && ref_pend_round){ ref_pend_round=0; ref_round(); }  /* 미뤄 둔 첫 구호 */
+    if(scr>=8 && p_scr<8 && ref_pend_round){
+      /* 판이 선 **그 프레임**에 구호(0초). 호명과의 심판 간격은 여기선 안 기다린다 —
+         호명은 VS 화면에서 제 시간을 다 썼고, 판이 서면 판 이야기를 해야 한다. */
+      ref_pend_round=0; ref_next=cm_f; ref_round();
+      if(pend_rel[0]){
+        emits(EV_REL, pend_rel); pend_rel[0]=0;
+        q_next = cm_f + 180;                     /* 관계는 구호 3초 뒤 — 겹치지 않게 */
+      }
+    }
     if(p_scr>=8 && (scr==0 || scr==2)){
       /* 매치가 실제로 끝났을 때만 결과 멘트를 낸다(2선승). 라운드 하나 이긴 것으로는 말하지 않는다.
          승패 화면에서는 **두 줄까지** — 결과 한 마디 + 한마디 더. 그 뒤 잡담은 잠시 잠근다.
@@ -798,11 +807,19 @@ const char *ss2comm_frame(void){
       else if(st_oppChar<0)                     rel = RELGAND[cm_spk];
       else rel = RELOPP[cm_spk][st_oppChar];          /* 225칸 — 빈칸 없음 */
       if(!rel && st_myChar>=0) rel = RELME[cm_spk][st_myChar];
-      if(rel) emits(EV_REL, rel);
-      else if(st_oppChar>=0 && LORE[st_oppChar]){
-        char t[160];
-        snprintf(t,sizeof(t),"%s — %s",CHARNAME[st_oppChar],LORE[st_oppChar]);
-        emits(EV_LORE, t);
+      /* 제보: 「초기 3초·6초 멘트를 0초·3초로」. 진입이 VS 화면이면 관계 대사도
+         여기서 내지 않고 미룬다 — VS 에서 소모되면 정작 판에서는 안 보인다. */
+      if(scr >= 8){
+        if(rel) emits(EV_REL, rel);
+        else if(st_oppChar>=0 && LORE[st_oppChar]){
+          char t[160];
+          snprintf(t,sizeof(t),"%s — %s",CHARNAME[st_oppChar],LORE[st_oppChar]);
+          emits(EV_LORE, t);
+        }
+      }else{
+        if(rel) snprintf(pend_rel,sizeof pend_rel,"%s",rel);
+        else if(st_oppChar>=0 && LORE[st_oppChar])
+          snprintf(pend_rel,sizeof pend_rel,"%s — %s",CHARNAME[st_oppChar],LORE[st_oppChar]);
       }
     }else{                                        /* 라운드 재개 */
       st_roundN++; st_fb=st_longSaid=st_dblLow=0;
@@ -1430,7 +1447,8 @@ static uint16_t tint(uint16_t c, int mood){
 #define BOX_LINE_H 13
 #define BOX_MAXL   3
 int ss2comm_band_h(void){ return (cm_on && (cm_draw==1 || cm_draw==4)) ? SS2_BAND_H : 0; }
-int ss2comm_ref_h(void){ return (cm_on && (cm_draw==1 || cm_draw==4)) ? SS2_REF_H : 0; }
+int ss2comm_ref_h(void){ return 0; }  /* 심판은 이제 게임 화면 위 오버레이 — 제 자리를 차지하지 않는다 */
+int ss2comm_ref_overlay(void);        /* 아래에 — 이번 프레임에 오버레이가 실제로 그려졌으면 그 높이 */
 int ss2comm_band_top(void){ return (cm_on && cm_draw==4) ? 1 : 0; }
 int ss2comm_drawing(void){ return (cm_on && cm_draw) ? 1 : 0; }
 
@@ -1565,17 +1583,16 @@ static const signed char SS2_SHAKE[6] = { 2, -2, 1, -1, 1, 0 };
 int ss2comm_impact(void){ return (cur_ev>=0 && cur_ev<EV_N) ? EVHIT[cur_ev] : 0; }
 
 /* ── 심판 칸 ─────────────────────────────────────────────────────
-   **해설창 바로 아래**에 붙는다. 둘 다 게임 화면 위쪽이다.
-   버퍼는 위에서부터 [해설 SS2_BAND_H][심판 SS2_REF_H][게임 h] 순으로 쌓인다.
-   자리를 나눠 두니 서로 밀어낼 일이 없고, 구호가 떠 있는 동안에도
-   바로 위에서는 해설이 제 말을 이어 간다. */
-static void draw_ref_strip(uint16_t *fb, int pitch_px, int w, int h){
+   전용 자리를 차지하지 않는다. **게임 화면 맨 아래 32줄에 오버레이**로 얹는다 —
+   대사가 서 있는 동안만 검은 상자가 뜨고, 끝나면 게임이 그대로 보인다.
+   (예전에는 해설창 아래 별도 칸이었다. 제보: 「추가 대화 공간 날려줘」) */
+static int ref_drawn_now;                        /* 이번 프레임에 실제로 그렸나 — 앱 32비트 경로가 묻는다 */
+static void draw_ref_strip(uint16_t *fb, int pitch_px, int w, int h, int bandTop){
   const char *seg[BOX_MAXL+1], *t, *end;
   int x, y, top, bot, tx0, x1, maxw, nl, i, lh, ty, show;
-  (void)h;
-  top = SS2_BAND_H;                 /* 해설창 바로 아래 */
+  ref_drawn_now = 0;
+  top = (bandTop ? SS2_BAND_H : 0) + h - SS2_REF_H;  /* 게임 자리의 마지막 32줄 */
   bot = top + SS2_REF_H;
-  for(y=top; y<bot; y++) for(x=0; x<w; x++) fb[y*pitch_px+x] = 0x0000;
   if(!ref_has && !ref_shown) return;
   if(ref_has){                                   /* 이번 프레임에 세운다 */
     if(cm_f < ref_next) return;
@@ -1583,6 +1600,8 @@ static void draw_ref_strip(uint16_t *fb, int pitch_px, int w, int h){
   }
   if(cm_f - ref_shown > REF_TTL){ ref_shown = 0; return; }
   t = ref_text; if(!*t) return;
+  ref_drawn_now = 1;
+  for(y=top; y<bot; y++) for(x=0; x<w; x++) fb[y*pitch_px+x] = 0x0000;
   end = t + strlen(t);
   if(ref_ok){                                    /* 쿠로코 초상 32x32 */
     int fx=2, fy=top, a, b;
@@ -1609,6 +1628,10 @@ static void draw_ref_strip(uint16_t *fb, int pitch_px, int w, int h){
   }
 }
 
+/* 이번 프레임에 심판 오버레이가 그려졌으면 높이(32)를 돌려준다.
+   32비트 화면 경로가 이걸 보고 게임 자리 맨 아래 32줄만 다시 변환한다. */
+int ss2comm_ref_overlay(void){ return ref_drawn_now ? SS2_REF_H : 0; }
+
 void ss2comm_draw(uint16_t *fb, int pitch_px, int w, int h){
   const char *line, *end, *seg[BOX_MAXL+1];
   int age=0, x, y, top, bot, mood, hit, spk, tx0, x1, maxw, show, i, nl, boxh, ty, lh;
@@ -1627,7 +1650,7 @@ void ss2comm_draw(uint16_t *fb, int pitch_px, int w, int h){
   }
   /* 초상 굽기가 먼저다. 심판 칸을 먼저 그리면 **첫 프레임에 쿠로코 얼굴이 빈다** */
   if(!face_built) build_faces();
-  if(band) draw_ref_strip(fb, pitch_px, w, h);   /* 심판 칸은 대사 유무와 무관하게 매 프레임 */
+  if(band) draw_ref_strip(fb, pitch_px, w, h, bandTop);   /* 심판 오버레이 — 대사가 서 있을 때만 그린다 */
   if(!line || age > CM_TTL) return;            /* 2.5초만 표시 */
 
   end  = line + strlen(line);
