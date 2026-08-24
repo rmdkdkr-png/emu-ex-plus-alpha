@@ -95,16 +95,25 @@ void NgpSystem::ss2SyncSurface()
 	/* 띠는 화면 **위**에 붙는다. 그래서 게임은 버퍼의 32줄 아래부터 그려지게 한다 —
 	   코어판처럼 매 프레임 그림을 memmove 로 밀 필요가 없다.
 	   심판은 제 칸이 없다 — ss2comm_draw 가 게임 자리 맨 아래 32줄에 오버레이로 얹는다. */
-	mSurfacePix = mFullPix.subView({0, ss2BandOn() ? ss2BandH : 0}, {ss2GameW, ss2GameH});
+	mSurfacePix = mFullPix.subView({ss2SideW, ss2BandOn() ? ss2BandH : 0}, {ss2GameW, ss2GameH});
 }
 
 IG::MutablePixmapView NgpSystem::ss2CommitPix()
 {
 	if(!ss2BandOn())
 		return mSurfacePix;                 /* 띠 없음 — 게임 화면만 올린다 */
+	bool sides = ss2SidesOn();
+	int totalH = ss2GameH + ss2BandH;
 	if(mFullPix.format().bytesPerPixel() == 2)
 	{
-		ss2comm_draw(reinterpret_cast<uint16_t*>(mFullPix.data()), mFullPix.pitchPx(), ss2GameW, ss2GameH);
+		auto fb = reinterpret_cast<uint16_t*>(mFullPix.data());
+		ss2comm_draw(fb + ss2SideW, mFullPix.pitchPx(), ss2GameW, ss2GameH);
+		if(sides)
+		{
+			/* 양옆 아트웍 기둥 — 그림은 엔진이 사용자 롬에서 굽는다 */
+			ss2comm_side(fb, mFullPix.pitchPx(), ss2SideW, totalH, 0);
+			ss2comm_side(fb + ss2SideW + ss2GameW, mFullPix.pitchPx(), ss2SideW, totalH, 1);
+		}
 	}
 	else
 	{
@@ -114,20 +123,31 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 		   안 그린 프레임에 변환하면 게임 그림이 검은 상자로 덮인다. */
 		ss2comm_draw(ss2BandScratch, ss2GameW, ss2GameW, ss2GameH);
 		IG::PixmapView band{{{ss2GameW, ss2BandH}, IG::PixelFmtRGB565}, ss2BandScratch};
-		mFullPix.subView({0, 0}, {ss2GameW, ss2BandH}).writeConverted(band);
+		mFullPix.subView({ss2SideW, 0}, {ss2GameW, ss2BandH}).writeConverted(band);
 		if(int refH = ss2comm_ref_overlay())
 		{
 			int top = ss2BandH;   /* 게임 자리의 첫 줄부터 — 엔진과 같은 자리 */
 			IG::PixmapView ref{{{ss2GameW, refH}, IG::PixelFmtRGB565}, ss2BandScratch + top * ss2GameW};
-			mFullPix.subView({0, top}, {ss2GameW, refH}).writeConverted(ref);
+			mFullPix.subView({ss2SideW, top}, {ss2GameW, refH}).writeConverted(ref);
+		}
+		if(sides)
+		{
+			for(int r = 0; r < 2; r++)
+			{
+				ss2comm_side(ss2BandScratch, ss2SideW, ss2SideW, totalH, r);
+				IG::PixmapView panel{{{ss2SideW, totalH}, IG::PixelFmtRGB565}, ss2BandScratch};
+				mFullPix.subView({r ? ss2SideW + ss2GameW : 0, 0}, {ss2SideW, totalH}).writeConverted(panel);
+			}
 		}
 	}
-	return mFullPix;
+	return sides ? mFullPix : mFullPix.subView({ss2SideW, 0}, {ss2GameW, totalH});
 }
 
 double NgpSystem::videoAspectRatioScale() const
 {
-	return ss2BandOn() ? double(ss2GameH) / double(ss2GameH + ss2BandH) : 1.;
+	double w = ss2GameW + (ss2SidesOn() ? 2. * ss2SideW : 0.);
+	double h = ss2GameH + (ss2BandOn() ? double(ss2BandH) : 0.);
+	return (w * ss2GameH) / (double(ss2GameW) * h);
 }
 
 bool NgpSystem::onVideoRenderFormatChange(EmuVideo &, PixelFormat fmt)

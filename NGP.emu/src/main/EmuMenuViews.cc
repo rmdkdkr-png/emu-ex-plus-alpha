@@ -288,6 +288,19 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		}
 	};
 
+	/* 양옆 아트웍 — 넓은 화면의 빈 좌우 기둥에 초상·이름을 세운다.
+	   그림은 사용자 롬에서 실행 중에 굽는다 — 배포물에는 그림이 없다. */
+	BoolMenuItem ss2commSides
+	{
+		"SS2 Side Art", attachParams(),
+		system().ss2commSides,
+		"Off", "On",
+		[this](BoolMenuItem &item, View &, Input::Event e)
+		{
+			system().ss2commSides = item.flipBoolValue(*this);
+		}
+	};
+
 	/* 큰 장면에 짧게 울린다. 화면 버튼 햅틱과 별개라 버튼 진동은 꺼 둔 채 쓸 수 있다. */
 	BoolMenuItem ss2commVibrate
 	{
@@ -321,6 +334,7 @@ public:
 		item.emplace_back(&ss2commEnabled);
 		item.emplace_back(&ss2commSpeaker);
 		item.emplace_back(&ss2commRef);
+		item.emplace_back(&ss2commSides);
 		item.emplace_back(&ss2commVibrate);
 		item.emplace_back(&saveFilenameType);
 	}

@@ -78,7 +78,7 @@ enum NgpConfigKey
 	/* SS2 원버튼 */
 	CFGKEY_SS2SP_SLOTS = 271, CFGKEY_SS2SP_ENABLED = 272, CFGKEY_SS2SP_LAYOUT = 273,
 	CFGKEY_SS2COMM_ENABLED = 274, CFGKEY_SS2COMM_SPK = 275, CFGKEY_SS2COMM_DRAW = 276,
-	CFGKEY_SS2COMM_VIBRATE = 277, CFGKEY_SS2COMM_REF = 278,
+	CFGKEY_SS2COMM_VIBRATE = 277, CFGKEY_SS2COMM_REF = 278, CFGKEY_SS2COMM_SIDES = 279,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -106,6 +106,7 @@ public:
 	   버튼 진동을 꺼 둔 채로도 이것만 켤 수 있다. */
 	bool ss2commVibrate{};
 	bool ss2commRef{true};           /* 심판(쿠로코) — 온이면 해설창을 심판이 우선 쓴다 */
+	bool ss2commSides{true};         /* 양옆 아트웍 기둥 — 넓은 화면의 빈 좌우를 채운다 */
 	/* 해설을 어디에 보여 줄까 — 0 알림 줄 / 1 게임 화면 **위**에 띠를 붙여 직접 그린다.
 	   띠 모드는 화자 얼굴까지 나온다. 얼굴은 배포물에 넣지 않고 사용자 롬에서 뽑는다. */
 	/* 게임 160×152 위에 32px 띠를 붙일 수 있게 버퍼를 처음부터 크게 잡아 둔다.
@@ -113,10 +114,11 @@ public:
 	/* 위 32줄 = 해설 띠. 심판(쿠로코)은 제 칸이 없다 — 게임 화면 맨 아래 32줄에
 	   **오버레이**로 얹힌다(대사가 서 있는 동안만). 32 인 이유는 쿠로코 초상이
 	   32x32(선택 화면 아이콘)뿐이기 때문이다. */
-	static constexpr int ss2GameW = 160, ss2GameH = 152, ss2BandH = 32, ss2RefH = 32;
+	static constexpr int ss2GameW = 160, ss2GameH = 152, ss2BandH = 32, ss2RefH = 32, ss2SideW = 64;
 	MutablePixmapView mSurfacePix;   /* 게임이 그려지는 자리 (띠를 켜면 32줄 아래) */
 	MutablePixmapView mFullPix;      /* 띠까지 포함한 버퍼 전체 */
-	static constexpr WSize vidBufferPx{ss2GameW, ss2GameH + ss2BandH};
+	/* 좌우 기둥까지 담는 폭 — 기둥을 끄면 가운데 폭만 서브뷰로 올린다 */
+	static constexpr WSize vidBufferPx{ss2GameW + 2*ss2SideW, ss2GameH + ss2BandH};
 	alignas(8) uint32_t pixBuff[vidBufferPx.x * vidBufferPx.y]{};
 	/* ss2comm_draw() 는 RGB565 전용이다. 화면이 32비트로 돌 때는 여기 그린 뒤 변환해 얹는다. */
 	uint16_t ss2BandScratch[ss2GameW * (ss2GameH + ss2BandH)]{};
@@ -147,6 +149,7 @@ public:
 	   PCE.emu 가 보이는 줄 수를 바꿀 때 쓰는 것과 같은 자리다. */
 	double videoAspectRatioScale() const;
 	bool ss2BandOn() const { return ss2commEnabled || ss2commRef; }   /* 어느 쪽이든 켜면 띠가 선다 */
+	bool ss2SidesOn() const { return ss2commSides && ss2BandOn(); }   /* 기둥은 엔진이 살아 있을 때만 */
 	void ss2SyncSurface();              /* 게임이 그려질 자리를 띠 유무에 맞춘다 */
 	MutablePixmapView ss2CommitPix();   /* 띠를 그리고, 화면에 올릴 그림을 돌려준다 */
 	void writeConfig(ConfigType, FileIO&);
