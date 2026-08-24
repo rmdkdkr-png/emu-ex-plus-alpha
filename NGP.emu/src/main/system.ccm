@@ -78,7 +78,7 @@ enum NgpConfigKey
 	/* SS2 원버튼 */
 	CFGKEY_SS2SP_SLOTS = 271, CFGKEY_SS2SP_ENABLED = 272, CFGKEY_SS2SP_LAYOUT = 273,
 	CFGKEY_SS2COMM_ENABLED = 274, CFGKEY_SS2COMM_SPK = 275, CFGKEY_SS2COMM_DRAW = 276,
-	CFGKEY_SS2COMM_VIBRATE = 277,
+	CFGKEY_SS2COMM_VIBRATE = 277, CFGKEY_SS2COMM_REF = 278,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -105,6 +105,7 @@ public:
 	/* 큰 장면에서 짧게 울린다. 화면 버튼 햅틱(VController)과는 **완전히 별개**라
 	   버튼 진동을 꺼 둔 채로도 이것만 켤 수 있다. */
 	bool ss2commVibrate{};
+	bool ss2commRef{true};           /* 심판(쿠로코) — 온이면 해설창을 심판이 우선 쓴다 */
 	/* 해설을 어디에 보여 줄까 — 0 알림 줄 / 1 게임 화면 **위**에 띠를 붙여 직접 그린다.
 	   띠 모드는 화자 얼굴까지 나온다. 얼굴은 배포물에 넣지 않고 사용자 롬에서 뽑는다. */
 	/* 게임 160×152 위에 32px 띠를 붙일 수 있게 버퍼를 처음부터 크게 잡아 둔다.
@@ -145,7 +146,7 @@ public:
 	/* 띠를 켜면 세로가 32줄 늘어난다 — 화면비를 그만큼 되돌린다.
 	   PCE.emu 가 보이는 줄 수를 바꿀 때 쓰는 것과 같은 자리다. */
 	double videoAspectRatioScale() const;
-	bool ss2BandOn() const { return ss2commEnabled; }
+	bool ss2BandOn() const { return ss2commEnabled || ss2commRef; }   /* 어느 쪽이든 켜면 띠가 선다 */
 	void ss2SyncSurface();              /* 게임이 그려질 자리를 띠 유무에 맞춘다 */
 	MutablePixmapView ss2CommitPix();   /* 띠를 그리고, 화면에 올릴 그림을 돌려준다 */
 	void writeConfig(ConfigType, FileIO&);

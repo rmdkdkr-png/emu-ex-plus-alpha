@@ -275,6 +275,19 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 	};
 
 
+	/* 심판(쿠로코) — 호명·N회전·승부!·한 판!·팻말 호명. 온이면 심판이 해설창을
+	   우선 쓰고 캐릭터챗은 후순위로 기다린다. */
+	BoolMenuItem ss2commRef
+	{
+		"SS2 Referee (Kuroko)", attachParams(),
+		system().ss2commRef,
+		"Off", "On",
+		[this](BoolMenuItem &item, View &, Input::Event e)
+		{
+			system().ss2commRef = item.flipBoolValue(*this);
+		}
+	};
+
 	/* 큰 장면에 짧게 울린다. 화면 버튼 햅틱과 별개라 버튼 진동은 꺼 둔 채 쓸 수 있다. */
 	BoolMenuItem ss2commVibrate
 	{
@@ -307,6 +320,7 @@ public:
 		item.emplace_back(&ss2spSlots);
 		item.emplace_back(&ss2commEnabled);
 		item.emplace_back(&ss2commSpeaker);
+		item.emplace_back(&ss2commRef);
 		item.emplace_back(&ss2commVibrate);
 		item.emplace_back(&saveFilenameType);
 	}

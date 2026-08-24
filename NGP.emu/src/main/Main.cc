@@ -177,10 +177,12 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	/* ── SS2 캐릭터 해설 ────────────────────────────────────────
 	   프레임을 돌린 뒤 램을 읽어 이벤트를 잡는다(브라우저판·코어판과 같은 엔진).
 	   대사는 코어가 띠에 직접 그리므로 여기서는 큐를 한 칸 미는 것과 진동만 한다. */
-	ss2comm_set_enabled(ss2commEnabled);
-	if(ss2commEnabled)
+	ss2comm_set_enabled(ss2commEnabled || ss2commRef);
+	if(ss2commEnabled || ss2commRef)
 	{
 		ss2comm_set_speaker(ss2commSpeaker);
+		ss2comm_set_ref(ss2commRef);
+		ss2comm_set_chat(ss2commEnabled);
 		/* 해설은 코어가 띠에 직접 그린다. 큐는 여기서 한 칸씩 밀어 준다. */
 		auto line = ss2comm_frame();
 		/* 진동 두 갈래: 해설창 강조줄(금빛) + 심판 구령(승부!·한 판! — 「쿵」).
