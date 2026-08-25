@@ -147,6 +147,7 @@ public:
 	void readState(EmuApp&, std::span<uint8_t> buff);
 	size_t writeState(std::span<uint8_t> buff, SaveStateFlags);
 	void ss2SceneDump(std::span<uint8_t> state);
+	void ss2SceneAuto();
 	bool readConfig(ConfigType, MapIO&, unsigned key);
 	/* 띠를 켜면 세로가 32줄 늘어난다 — 화면비를 그만큼 되돌린다.
 	   PCE.emu 가 보이는 줄 수를 바꿀 때 쓰는 것과 같은 자리다. */

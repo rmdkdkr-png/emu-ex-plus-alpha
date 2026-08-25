@@ -65,6 +65,41 @@ size_t NgpSystem::writeState(std::span<uint8_t> buff, SaveStateFlags flags)
 	return n;
 }
 
+void NgpSystem::ss2SceneAuto()
+{
+	/* 장면 자동 수집(제보: 「내가 플레이하면 체크되게」) — (mode, scr) 조합이 바뀌면
+	   30프레임 뒤(화면이 다 선 뒤) 상태·램·화면을 떨군다. 같은 조합은 5초 간격,
+	   최대 4번까지(스토리 페이지처럼 같은 조합의 다른 장면 대비), 세션당 60장. */
+	using namespace MDFN_IEN_NGP;
+	static uint32_t fc; static uint16_t lastSig = 0xFFFF; static int pend = -1;
+	static struct { uint16_t sig; uint8_t n; uint32_t at; } seen[64];
+	static int nSeen, total;
+	fc++;
+	uint8_t mode = CPUExRAM[0x00A7], scr = CPUExRAM[0x01C0];
+	uint16_t sig = uint16_t(mode << 8 | (scr & 15));
+	if(sig != lastSig) { lastSig = sig; pend = 30; }
+	if(pend <= 0 || --pend != 0 || total >= 60)
+		return;
+	int i = 0;
+	for(; i < nSeen; i++) if(seen[i].sig == sig) break;
+	if(i < nSeen)
+	{
+		if(seen[i].n >= 4 || fc - seen[i].at < 300)
+			return;
+		seen[i].n++; seen[i].at = fc;
+	}
+	else if(nSeen < 64)
+	{
+		seen[nSeen++] = {sig, 1, fc};
+	}
+	else return;
+	total++;
+	auto sz = stateSizeMDFN();
+	std::vector<uint8_t> st(sz);
+	auto n = writeStateMDFN(st, {});
+	if(n) ss2SceneDump({st.data(), n});
+}
+
 void NgpSystem::ss2SceneDump(std::span<uint8_t> state)
 {
 	using namespace MDFN_IEN_NGP;
@@ -267,6 +302,8 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	/* ── SS2 캐릭터 해설 ────────────────────────────────────────
 	   프레임을 돌린 뒤 램을 읽어 이벤트를 잡는다(브라우저판·코어판과 같은 엔진).
 	   대사는 코어가 띠에 직접 그리므로 여기서는 큐를 한 칸 미는 것과 진동만 한다. */
+	if(ss2commSceneCap)
+		ss2SceneAuto();
 	ss2comm_set_enabled(ss2commEnabled || ss2commRef || ss2commSides);
 	if(ss2commEnabled || ss2commRef || ss2commSides)
 	{
