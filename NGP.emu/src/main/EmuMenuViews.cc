@@ -219,6 +219,7 @@ private:
 class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 {
 	using MainAppHelper::system;
+	using MainAppHelper::app;
 
 	BoolMenuItem ngpLanguage
 	{
@@ -336,6 +337,19 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		}
 	};
 
+	/* 버전 정보 — 앱 버전은 metadata/conf.mk 의 android_metadata_version 과 같이 올린다 */
+	TextMenuItem ss2Version
+	{
+		"버전 정보", attachParams(),
+		[this]()
+		{
+			app().postMessage(6, false,
+				"NGPcustumSP 1.5.85-SS2-1.0.1\n"
+				"해설 엔진 SS2comm v" SS2COMM_VERSION
+				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL");
+		}
+	};
+
 	BoolMenuItem saveFilenameType = saveFilenameTypeMenuItem(*this, system());
 
 public:
@@ -351,6 +365,7 @@ public:
 		item.emplace_back(&ss2commSides);
 		item.emplace_back(&ss2commSceneCap);
 		item.emplace_back(&ss2commVibrate);
+		item.emplace_back(&ss2Version);
 		item.emplace_back(&saveFilenameType);
 	}
 };

@@ -1,5 +1,7 @@
 include $(EMUFRAMEWORK_PATH)/metadata/conf.mk
-metadata_name = NGP.emu SS2
+# 표시 이름 — 유저 확정 별칭 (2026-08-25). 원작 상표(NGP.emu·NEO.emu)와 구분한다.
+# 버전 정보 문구(EmuMenuViews.cc)도 같이 맞춘다.
+metadata_name = NGPcustumSP
 metadata_exec = ngpemu
 # ⚠ metadata_pkgName 은 바꾸지 말 것 — 워크플로가 NgpEmu-release.apk 를 이름으로 복사한다.
 metadata_pkgName = NgpEmu
