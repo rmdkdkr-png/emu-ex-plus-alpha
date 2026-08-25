@@ -187,6 +187,7 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 	bool sides = ss2SidesOn();
 	if(!ss2BandOn() && !sides)
 		return mSurfacePix;                 /* 띠도 기둥도 없음 — 게임 화면만 올린다 */
+	ss2comm_side_bgmode(ss2commSideBg);
 	if(sides && ss2comm_side_wantbake())
 	{
 		/* 기둥 배경을 스테이지 타일로 굽는다 — 매치가 설 때만(엔진이 예약).
