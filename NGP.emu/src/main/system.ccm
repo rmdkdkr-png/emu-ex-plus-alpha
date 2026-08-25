@@ -113,7 +113,6 @@ public:
 	bool ss2commSides{true};         /* 양옆 아트웍 기둥 — 넓은 화면의 빈 좌우를 채운다 */
 	bool ss2commSceneCap{};
 	bool ss2ovComboLatch{};          /* 위+옵션 콤보 한 번만 발동 래치 */          /* 장면 수집 — 세이브스테이트 때마다 상태·램·화면을 덤프 */
-	uint8_t ss2commSideBg{};         /* 기둥 배경 고르기 — 0 자동 / 1..6 고정 구간 / 9 격자 */
 	/* 해설을 어디에 보여 줄까 — 0 알림 줄 / 1 게임 화면 **위**에 띠를 붙여 직접 그린다.
 	   띠 모드는 화자 얼굴까지 나온다. 얼굴은 배포물에 넣지 않고 사용자 롬에서 뽑는다. */
 	/* 게임 160×152 위에 32px 띠를 붙일 수 있게 버퍼를 처음부터 크게 잡아 둔다.
@@ -143,8 +142,9 @@ public:
 		ss2comm_set_ram(MDFN_IEN_NGP::CPUExRAM);
 		ss2comm_overlay_bind(reinterpret_cast<unsigned char*>(&ss2commEnabled), &ss2commSpeaker,
 			reinterpret_cast<unsigned char*>(&ss2commRef), reinterpret_cast<unsigned char*>(&ss2commSides),
-			&ss2commSideBg, reinterpret_cast<unsigned char*>(&ss2commVibrate),
-			reinterpret_cast<unsigned char*>(&ss2commSceneCap));
+			nullptr /* 기둥 배경 옵션 폐지 */, reinterpret_cast<unsigned char*>(&ss2commVibrate),
+			reinterpret_cast<unsigned char*>(&ss2commSceneCap),
+			reinterpret_cast<unsigned char*>(&ss2spEnabled));
 	}
 
 	// required API functions

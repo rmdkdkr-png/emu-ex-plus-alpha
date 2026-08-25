@@ -302,25 +302,6 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 	};
 
 	/* 기둥 배경 고르기 — 자동(화면 밖 이어붙임)이 어색한 스테이지에서 돌려 가며 고른다 */
-	TextMenuItem ss2commSideBgItem[8]
-	{
-		{"Auto (Offscreen)", attachParams(), [this](){ system().ss2commSideBg = 0; }},
-		{"Slice 1", attachParams(), [this](){ system().ss2commSideBg = 1; }},
-		{"Slice 2", attachParams(), [this](){ system().ss2commSideBg = 2; }},
-		{"Slice 3", attachParams(), [this](){ system().ss2commSideBg = 3; }},
-		{"Slice 4", attachParams(), [this](){ system().ss2commSideBg = 4; }},
-		{"Slice 5", attachParams(), [this](){ system().ss2commSideBg = 5; }},
-		{"Slice 6", attachParams(), [this](){ system().ss2commSideBg = 6; }},
-		{"Pattern", attachParams(), [this](){ system().ss2commSideBg = 7; }},
-	};
-
-	MultiChoiceMenuItem ss2commSideBg
-	{
-		"SS2 Side BG", attachParams(),
-		int(system().ss2commSideBg & 7),   /* 저장값 0..7 (옛 설정 9=격자는 7로 흡수) */
-		ss2commSideBgItem
-	};
-
 	/* 장면 수집 — 온이면 세이브스테이트를 뜰 때마다 상태·램·화면 파일이
 	   세이브 폴더(.ngf 옆)에 쌓인다. 관찰용 — 평소엔 꺼 둔다. */
 	BoolMenuItem ss2commSceneCap
@@ -368,7 +349,6 @@ public:
 		item.emplace_back(&ss2commSpeaker);
 		item.emplace_back(&ss2commRef);
 		item.emplace_back(&ss2commSides);
-		item.emplace_back(&ss2commSideBg);
 		item.emplace_back(&ss2commSceneCap);
 		item.emplace_back(&ss2commVibrate);
 		item.emplace_back(&saveFilenameType);

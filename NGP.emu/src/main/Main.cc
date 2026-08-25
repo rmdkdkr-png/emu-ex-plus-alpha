@@ -168,6 +168,14 @@ void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 {
 	static constexpr size_t maxRomSize = 0x400000;
 	EmuEx::loadContent(*this, mdfnGameInfo, io, maxRomSize);
+	/* SS2 전용판 — 다른 롬은 열지 않는다. 범용 NGP 에뮬로 쓰이면 원작자(EmuEx)의
+	   유료 앱 이익을 침해한다. 헤더 타이틀(0x24 "SAMURAI2")로 판별한다. */
+	if(MDFN_IEN_NGP::ngpc_rom.length < 0x30 ||
+	   memcmp(MDFN_IEN_NGP::ngpc_rom.data + 0x24, "SAMURAI2", 8) != 0)
+	{
+		throw std::runtime_error{"SS2 커스텀판입니다 — 사무라이 쇼다운!2 롬만 열 수 있습니다.\n"
+		                         "다른 게임은 정식 NGP.emu 앱을 이용해 주세요."};
+	}
 	/* 해설 띠에 그릴 얼굴은 **사용자 롬에서 실행 중에 뽑는다** — 배포물에 그림을 넣지 않는다.
 	   코어판(libretro)에도 같은 줄이 있다. 이 줄이 없으면 띠에 얼굴 자리가 빈다. */
 	ss2comm_set_rom(MDFN_IEN_NGP::ngpc_rom.orig_data, MDFN_IEN_NGP::ngpc_rom.length);
@@ -187,21 +195,6 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 	bool sides = ss2SidesOn();
 	if(!ss2BandOn() && !sides)
 		return mSurfacePix;                 /* 띠도 기둥도 없음 — 게임 화면만 올린다 */
-	{	/* 저장값 0..7 → 엔진 모드(0 자동 / 1..6 구간 / 9 격자) */
-		static constexpr uint8_t bgmap[8]{0, 1, 2, 3, 4, 5, 6, 9};
-		ss2comm_side_bgmode(bgmap[ss2commSideBg & 7]);
-	}
-	if(sides && ss2comm_side_wantbake())
-	{
-		/* 기둥 배경을 스테이지 타일로 굽는다 — 매치가 설 때만(엔진이 예약).
-		   K1GE 공간을 read8 로 떠서 넘긴다(스크롤2 타일맵·패턴·팔레트·스크롤). */
-		using namespace MDFN_IEN_NGP;
-		static uint8_t m2[2048], cr[8192], pl[512];
-		for(int i = 0; i < 2048; i++) m2[i] = NGPGfx->read8(0x9800 + i);
-		for(int i = 0; i < 8192; i++) cr[i] = NGPGfx->read8(0xA000 + i);
-		for(int i = 0; i < 512; i++)  pl[i] = NGPGfx->read8(0x8200 + i);
-		ss2comm_side_tiles(m2, cr, pl, NGPGfx->read8(0x8034), NGPGfx->read8(0x8035));
-	}
 	int totalH = ss2GameH + (ss2BandOn() ? ss2BandH : 0);   /* 띠 없이 기둥만도 된다 */
 	if(mFullPix.format().bytesPerPixel() == 2)
 	{
@@ -291,6 +284,15 @@ void NgpSystem::configAudioRate(FrameRate outputFrameRate, int outputRate)
 void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
 {
 	static constexpr size_t maxAudioFrames = 48000 / AppMeta::minFrameRate;
+	/* ── 빠른 설정 = 일시정지 메뉴 ─────────────────────────────
+	   설정창이 열려 있는 동안은 에뮬레이션을 돌리지 않는다(소리도 없음).
+	   마지막 프레임 표면 위에 오버레이만 다시 그려 낸다. */
+	if(ss2comm_overlay_active())
+	{
+		if(video)
+			video->startFrameWithFormat(taskCtx, ss2CommitPix());
+		return;
+	}
 	/* ── SS2 원버튼 엔진 ────────────────────────────────────────
 	   NGP.emu 는 Emulate() 안의 storeB(0x6F82, *chee) 가 주석 처리돼 있고
 	   입력 이벤트 때 직접 쓴다. 그래서 프레임 직전에 여기서 한 번 덮어쓰면
