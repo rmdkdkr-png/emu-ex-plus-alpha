@@ -111,7 +111,8 @@ public:
 	bool ss2commVibrate{};
 	bool ss2commRef{true};           /* 심판(쿠로코) — 온이면 해설창을 심판이 우선 쓴다 */
 	bool ss2commSides{true};         /* 양옆 아트웍 기둥 — 넓은 화면의 빈 좌우를 채운다 */
-	bool ss2commSceneCap{};          /* 장면 수집 — 세이브스테이트 때마다 상태·램·화면을 덤프 */
+	bool ss2commSceneCap{};
+	bool ss2ovComboLatch{};          /* 위+옵션 콤보 한 번만 발동 래치 */          /* 장면 수집 — 세이브스테이트 때마다 상태·램·화면을 덤프 */
 	uint8_t ss2commSideBg{};         /* 기둥 배경 고르기 — 0 자동 / 1..6 고정 구간 / 9 격자 */
 	/* 해설을 어디에 보여 줄까 — 0 알림 줄 / 1 게임 화면 **위**에 띠를 붙여 직접 그린다.
 	   띠 모드는 화자 얼굴까지 나온다. 얼굴은 배포물에 넣지 않고 사용자 롬에서 뽑는다. */
@@ -191,20 +192,21 @@ public:
 			return;
 		}
 		if(ss2comm_overlay_active() &&
-		   a.code >= KeyCode(NgpKey::Up) && a.code <= KeyCode(NgpKey::B))
+		   a.code >= KeyCode(NgpKey::Up) && a.code <= KeyCode(NgpKey::Option))
 		{
-			/* 설정창이 열려 있다 — 방향·A·B 는 설정창 몫, 게임엔 안 보낸다 */
+			/* 설정창이 열려 있다 — 방향·A·B·옵션은 설정창 몫, 게임엔 안 보낸다 */
 			if(a.state == Input::Action::PUSHED)
 			{
 				int k = -1;
 				switch(NgpKey(a.code))
 				{
-					case NgpKey::Up:    k = 0; break;
-					case NgpKey::Down:  k = 1; break;
-					case NgpKey::Left:  k = 2; break;
-					case NgpKey::Right: k = 3; break;
-					case NgpKey::A:     k = 4; break;
-					case NgpKey::B:     k = 5; break;
+					case NgpKey::Up:     k = 0; break;
+					case NgpKey::Down:   k = 1; break;
+					case NgpKey::Left:   k = 2; break;
+					case NgpKey::Right:  k = 3; break;
+					case NgpKey::A:      k = 4; break;
+					case NgpKey::B:      k = 5; break;
+					case NgpKey::Option: k = 5; break;   /* 옵션 = 닫기 */
 					default: break;
 				}
 				if(k >= 0)
@@ -241,6 +243,21 @@ public:
 			return;
 		}
 		inputBuff = setOrClearBits(inputBuff, bit(a.code - 1), a.state == Input::Action::PUSHED);
+		/* 기본 제스처: 위+옵션 동시 누름 = 빠른 설정 (전용 버튼을 안 깔아도 열린다) */
+		{
+			constexpr uint8_t comboMask = uint8_t(bit(0) | bit(6));   /* Up + Option */
+			if((inputBuff & comboMask) == comboMask)
+			{
+				if(!ss2ovComboLatch)
+				{
+					ss2ovComboLatch = true;
+					ss2comm_overlay_toggle();
+					inputBuff = {};   /* 게임이 점프·일시정지로 받지 않게 비운다 */
+				}
+			}
+			else if(!(inputBuff & comboMask))
+				ss2ovComboLatch = false;
+		}
 		/* 엔진이 켜져 있으면 패드는 runFrame 에서 한 번에 쓴다 */
 		if(!ss2spEnabled)
 			MDFN_IEN_NGP::storeB(0x6F82, inputBuff);
