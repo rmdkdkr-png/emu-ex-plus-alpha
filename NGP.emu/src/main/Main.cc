@@ -246,6 +246,15 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 				mFullPix.subView({r ? ss2SideW + ss2GameW : 0, 0}, {ss2SideW, totalH}).writeConverted(panel);
 			}
 		}
+		if(ss2comm_overlay_active())
+		{
+			/* 32비트 표면 — 스크래치(565)에 그려 변환해 얹는다. 스크래치엔 게임 그림이
+			   없으므로 바탕을 검게 깔고 게임 자리 전체를 덮는다(모달처럼 보인다). */
+			std::fill_n(ss2BandScratch, size_t(ss2GameW) * ss2GameH, uint16_t(0));
+			ss2comm_overlay_draw(ss2BandScratch, ss2GameW, ss2GameW, ss2GameH);
+			IG::PixmapView ov{{{ss2GameW, ss2GameH}, IG::PixelFmtRGB565}, ss2BandScratch};
+			mFullPix.subView({ss2SideW, ss2BandOn() ? ss2BandH : 0}, {ss2GameW, ss2GameH}).writeConverted(ov);
+		}
 	}
 	if(sides)
 		return ss2BandOn() ? IG::MutablePixmapView{mFullPix}
