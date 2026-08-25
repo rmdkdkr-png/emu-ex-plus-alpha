@@ -301,6 +301,19 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		}
 	};
 
+	/* 장면 수집 — 온이면 세이브스테이트를 뜰 때마다 상태·램·화면 파일이
+	   세이브 폴더(.ngf 옆)에 쌓인다. 관찰용 — 평소엔 꺼 둔다. */
+	BoolMenuItem ss2commSceneCap
+	{
+		"SS2 Scene Capture", attachParams(),
+		system().ss2commSceneCap,
+		"Off", "On",
+		[this](BoolMenuItem &item, View &, Input::Event e)
+		{
+			system().ss2commSceneCap = item.flipBoolValue(*this);
+		}
+	};
+
 	/* 큰 장면에 짧게 울린다. 화면 버튼 햅틱과 별개라 버튼 진동은 꺼 둔 채 쓸 수 있다. */
 	BoolMenuItem ss2commVibrate
 	{
@@ -335,6 +348,7 @@ public:
 		item.emplace_back(&ss2commSpeaker);
 		item.emplace_back(&ss2commRef);
 		item.emplace_back(&ss2commSides);
+		item.emplace_back(&ss2commSceneCap);
 		item.emplace_back(&ss2commVibrate);
 		item.emplace_back(&saveFilenameType);
 	}

@@ -15,6 +15,9 @@
 
 module;
 #include <mednafen/mednafen.h>
+#include <format>
+#include <vector>
+#include <cstring>
 #include <ss2sp/ss2sp.h>
 #include <ss2comm/ss2comm.h>
 #include <mednafen/state-driver.h>
@@ -51,7 +54,53 @@ FS::FileString NgpSystem::stateFilename(int slot, std::string_view name) const
 
 size_t NgpSystem::stateSize() { return stateSizeMDFN(); }
 void NgpSystem::readState(EmuApp&, std::span<uint8_t> buff) { readStateMDFN(buff); }
-size_t NgpSystem::writeState(std::span<uint8_t> buff, SaveStateFlags flags) { return writeStateMDFN(buff, flags); }
+size_t NgpSystem::writeState(std::span<uint8_t> buff, SaveStateFlags flags)
+{
+	auto n = writeStateMDFN(buff, flags);
+	/* 장면 수집(SS2 Scene Capture 온일 때만): 유저가 **직접** 세이브스테이트를 뜨는
+	   순간마다 상태·램·화면 세 파일을 .ngf 폴더에 번호 붙여 떨군다.
+	   자동 감지는 없다 — 찍을 장면은 사람이 고른다(제보). */
+	if(ss2commSceneCap && n)
+		ss2SceneDump({buff.data(), n});
+	return n;
+}
+
+void NgpSystem::ss2SceneDump(std::span<uint8_t> state)
+{
+	using namespace MDFN_IEN_NGP;
+	static int idx;
+	uint8_t mode = CPUExRAM[0x00A7], scr = CPUExRAM[0x01C0], stage = CPUExRAM[0x17FE];
+	auto tag = std::format("_scene{:02d}_m{:02X}_s{}_st{}", idx, mode, scr, stage);
+	idx++;
+	auto ctx = appContext();
+	FileUtils::writeToUri(ctx, gApp().contentSaveFilePath((tag + ".state").c_str()), state);
+	FileUtils::writeToUri(ctx, gApp().contentSaveFilePath((tag + ".ram").c_str()), {CPUExRAM, 16384});
+	/* 화면을 PPM 으로 — 게임 자리(160x152)만 */
+	std::vector<uint8_t> ppm;
+	auto hdr = std::format("P6\n{} {}\n255\n", ss2GameW, ss2GameH);
+	ppm.insert(ppm.end(), hdr.begin(), hdr.end());
+	int bpp = mSurfacePix.format().bytesPerPixel();
+	for(int y = 0; y < ss2GameH; y++)
+	{
+		auto row = reinterpret_cast<const uint8_t*>(mSurfacePix.data()) + y * mSurfacePix.pitchBytes();
+		for(int x = 0; x < ss2GameW; x++)
+		{
+			uint8_t r, g, b;
+			if(bpp == 2)
+			{
+				uint16_t v; memcpy(&v, row + x*2, 2);
+				r = ((v>>11)&31)*255/31; g = ((v>>5)&63)*255/63; b = (v&31)*255/31;
+			}
+			else
+			{
+				r = row[x*4]; g = row[x*4+1]; b = row[x*4+2];
+			}
+			ppm.push_back(r); ppm.push_back(g); ppm.push_back(b);
+		}
+	}
+	FileUtils::writeToUri(ctx, gApp().contentSaveFilePath((tag + ".ppm").c_str()), ppm);
+	log.info("장면 수집:{}", tag);
+}
 
 static FS::PathString saveFilename(const EmuApp &app)
 {
