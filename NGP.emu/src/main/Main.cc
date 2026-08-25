@@ -187,7 +187,10 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 	bool sides = ss2SidesOn();
 	if(!ss2BandOn() && !sides)
 		return mSurfacePix;                 /* 띠도 기둥도 없음 — 게임 화면만 올린다 */
-	ss2comm_side_bgmode(ss2commSideBg);
+	{	/* 저장값 0..7 → 엔진 모드(0 자동 / 1..6 구간 / 9 격자) */
+		static constexpr uint8_t bgmap[8]{0, 1, 2, 3, 4, 5, 6, 9};
+		ss2comm_side_bgmode(bgmap[ss2commSideBg & 7]);
+	}
 	if(sides && ss2comm_side_wantbake())
 	{
 		/* 기둥 배경을 스테이지 타일로 굽는다 — 매치가 설 때만(엔진이 예약).
@@ -212,6 +215,9 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 			ss2comm_side(fb, pitch, ss2SideW, totalH, 0);
 			ss2comm_side(fb + ss2SideW + ss2GameW, pitch, ss2SideW, totalH, 1);
 		}
+		if(ss2comm_overlay_active())
+			ss2comm_overlay_draw(fb + ss2SideW + (ss2BandOn() ? ss2BandH : 0) * mFullPix.pitchPx(),
+			                     mFullPix.pitchPx(), ss2GameW, ss2GameH);
 	}
 	else
 	{

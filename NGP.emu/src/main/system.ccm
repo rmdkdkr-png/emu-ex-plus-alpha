@@ -65,6 +65,9 @@ export enum class NgpKey: KeyCode
 	   설정 메뉴를 열지 않고 판 중에 바꾸려는 것이다(브라우저판은 해설창 얼굴을 누른다).
 	   실기 패드로 가지 않는 가상 키라 패드 바이트를 건드리지 않는다. */
 	CommNext = 17,
+	/* v0.9: 빠른 설정 오버레이 — 게임 화면 위에 설정창을 직접 띄운다.
+	   열려 있는 동안 방향·A·B 는 게임 대신 설정창으로 간다. */
+	CommMenu = 18,
 };
 
 /* 엔진 선언은 ss2sp/ss2sp.h (global module fragment 에서 include) */
@@ -137,6 +140,10 @@ public:
 		mdfnGameInfo.SetInput(0, "gamepad", (uint8*)&inputBuff);
 		ss2sp_set_ram(MDFN_IEN_NGP::CPUExRAM);
 		ss2comm_set_ram(MDFN_IEN_NGP::CPUExRAM);
+		ss2comm_overlay_bind(reinterpret_cast<unsigned char*>(&ss2commEnabled), &ss2commSpeaker,
+			reinterpret_cast<unsigned char*>(&ss2commRef), reinterpret_cast<unsigned char*>(&ss2commSides),
+			&ss2commSideBg, reinterpret_cast<unsigned char*>(&ss2commVibrate),
+			reinterpret_cast<unsigned char*>(&ss2commSceneCap));
 	}
 
 	// required API functions
@@ -171,6 +178,40 @@ public:
 
 	void handleInputAction(EmuApp *appPtr, InputAction a)
 	{
+		if(a.code == KeyCode(NgpKey::CommMenu))
+		{
+			if(a.state == Input::Action::PUSHED)
+			{
+				ss2comm_overlay_toggle();
+				/* 여닫는 순간 눌려 있던 키 잔상 제거 — 게임이 이어받지 않게 */
+				inputBuff = {};
+				if(!ss2spEnabled)
+					MDFN_IEN_NGP::storeB(0x6F82, inputBuff);
+			}
+			return;
+		}
+		if(ss2comm_overlay_active() &&
+		   a.code >= KeyCode(NgpKey::Up) && a.code <= KeyCode(NgpKey::B))
+		{
+			/* 설정창이 열려 있다 — 방향·A·B 는 설정창 몫, 게임엔 안 보낸다 */
+			if(a.state == Input::Action::PUSHED)
+			{
+				int k = -1;
+				switch(NgpKey(a.code))
+				{
+					case NgpKey::Up:    k = 0; break;
+					case NgpKey::Down:  k = 1; break;
+					case NgpKey::Left:  k = 2; break;
+					case NgpKey::Right: k = 3; break;
+					case NgpKey::A:     k = 4; break;
+					case NgpKey::B:     k = 5; break;
+					default: break;
+				}
+				if(k >= 0)
+					ss2comm_overlay_input(k);
+			}
+			return;
+		}
 		if(a.code == KeyCode(NgpKey::CommNext))
 		{
 			if(a.state != Input::Action::PUSHED)

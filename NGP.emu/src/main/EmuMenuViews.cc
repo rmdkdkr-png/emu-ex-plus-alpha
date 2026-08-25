@@ -311,13 +311,13 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		{"Slice 4", attachParams(), [this](){ system().ss2commSideBg = 4; }},
 		{"Slice 5", attachParams(), [this](){ system().ss2commSideBg = 5; }},
 		{"Slice 6", attachParams(), [this](){ system().ss2commSideBg = 6; }},
-		{"Pattern", attachParams(), [this](){ system().ss2commSideBg = 9; }},
+		{"Pattern", attachParams(), [this](){ system().ss2commSideBg = 7; }},
 	};
 
 	MultiChoiceMenuItem ss2commSideBg
 	{
 		"SS2 Side BG", attachParams(),
-		int(system().ss2commSideBg == 9 ? 7 : system().ss2commSideBg),
+		int(system().ss2commSideBg & 7),   /* 저장값 0..7 (옛 설정 9=격자는 7로 흡수) */
 		ss2commSideBgItem
 	};
 

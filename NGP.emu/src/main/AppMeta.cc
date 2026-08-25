@@ -65,7 +65,7 @@ constexpr auto abKeyInfo = makeArray<KeyInfo>(NgpKey::AB);
 
 /* v0.7: 해설자 교대 버튼. 누를 때마다 다음 사람에게 넘어간다(15명 순환).
    설정 메뉴를 열지 않고 판 중에 바꾸려는 것 — 브라우저판의 「해설창 얼굴 누르기」와 같은 자리다. */
-constexpr auto commKeyInfo = makeArray<KeyInfo>(NgpKey::CommNext);
+constexpr auto commKeyInfo = makeArray<KeyInfo>(NgpKey::CommNext, NgpKey::CommMenu);
 
 constexpr auto gpKeyInfo = concatToArrayNow<dpadKeyInfo, optionKeyInfo, faceKeyInfo, turboFaceKeyInfo, spKeyInfo, abKeyInfo, commKeyInfo>;
 
@@ -99,6 +99,7 @@ std::string_view AppMeta::systemKeyCodeToString(KeyCode c)
 		case NgpKey::SP8: return "SP 8 (Super)";
 		case NgpKey::AB: return "C";
 		case NgpKey::CommNext: return "Commentator";
+		case NgpKey::CommMenu: return "Quick Settings";
 		default: return "";
 	}
 }
@@ -119,6 +120,7 @@ std::span<const KeyConfigDesc> AppMeta::defaultKeyConfigs()
 		/* SS2 원버튼 — SP 하나와 A+B 뿐이다 (뒤+A+B = 비오의) */
 		KeyMapping{NgpKey::SP1, Keycode::A},
 		KeyMapping{NgpKey::AB, Keycode::C},
+		KeyMapping{NgpKey::CommMenu, Keycode::V},
 	};
 
 	static constexpr std::array genericGamepadMap
@@ -213,6 +215,7 @@ AssetDesc AppMeta::vControllerAssetDesc(KeyInfo key)
 		case NgpKey::SP8: return virtualControllerAssets.sp8;
 		case NgpKey::AB:  return virtualControllerAssets.ab;
 		case NgpKey::CommNext: return virtualControllerAssets.commNext;
+		case NgpKey::CommMenu: return virtualControllerAssets.commNext;
 		default: return virtualControllerAssets.blank;
 	}
 }

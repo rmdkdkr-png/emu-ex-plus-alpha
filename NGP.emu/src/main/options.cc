@@ -41,7 +41,12 @@ bool NgpSystem::readConfig(ConfigType type, MapIO &io, unsigned key)
 			case CFGKEY_SS2COMM_REF: return readOptionValue(io, ss2commRef);
 			case CFGKEY_SS2COMM_SIDES: return readOptionValue(io, ss2commSides);
 			case CFGKEY_SS2COMM_SCENECAP: return readOptionValue(io, ss2commSceneCap);
-			case CFGKEY_SS2COMM_SIDEBG: return readOptionValue(io, ss2commSideBg);
+			case CFGKEY_SS2COMM_SIDEBG:
+			{
+				auto ok = readOptionValue(io, ss2commSideBg);
+				if(ss2commSideBg > 7) ss2commSideBg = 7;   /* 옛 저장값 9(격자) 이행 */
+				return ok;
+			}
 			/* 표시 방식(알림/띠) 고르기는 없앴다. 해설은 늘 띠에 그린다.
 			   옛 설정 파일에 이 키가 남아 있어도 조용히 넘기려고 읽기만 남겨 둔다. */
 			case CFGKEY_SS2COMM_DRAW: { uint8_t unused{}; return readOptionValue(io, unused); }
