@@ -168,6 +168,7 @@ static int sess_wins, sess_games, sess_streak, sess_survBest, sess_lastLossChar 
 static int st_fHp1, st_fHp2;   /* KO 전 마지막으로 본 두 체력 — 타임오버 라운드 판정용 */
 static int st_settled;         /* 이번 매치의 승패 정산(연승·전적)을 이미 했나 */
 static int blk_boot = -1, blk_moved;   /* 부팅 뒤 BLK1 이 한 번이라도 움직였나 — 기본값 썰 도배 방지 */
+static int st_oppGand;   /* 지금 상대가 간다라인가 — 이름은 「간다라」로 부른다(제보: 게임 명패는 수라라 떠도) */
 static int st_survSaid = -1, st_streakSaid = -1;   /* 이미 낭독한 연승 값 — 같은 값 반복 금지 */
 static int surv_seen = -1, surv_live;   /* 무한대전 카운터가 이번 세션에 실제로 움직였나 —
                                            스토리는 이 값을 안 지워서(실기 검증) 잔존 15가 판마다 읽혔다 */
@@ -308,6 +309,17 @@ static void mark_said(const char *s){
    없는 것만 못하다. 그래서 자리가 없을 때는 **두어도 되는 말부터 밀어낸다.**
    (증상: 매치 시작에 들어온 관계 대사 둘이 두 칸을 차지한 채 심판이 게이트를 잡고
     있는 동안, 그 뒤 KO·퍼펙트·총평·결과가 통째로 버려졌다) */
+/* 결과 계열은 안무가 길어도 살린다 — 결과 화면에서 하는 말이라 늦은 게 아니다.
+   순간 반응(KO·완승 따위)만 6초 컷에 걸린다. */
+static int ev_resultish(int ev){
+  switch(ev){
+    case EV_WINSCR: case EV_LOSESCR: case EV_WINTALK: case EV_LOSETALK: case EV_RECORD:
+    case EV_ARCSWEEP: case EV_ARCSWEPT: case EV_ARCCOMEBACK: case EV_ARCSWEAT:
+    case EV_ARCCHOKE: case EV_ARCSLIP: case EV_REL: case EV_LORE:
+      return 1;
+    default: return 0;
+  }
+}
 static int ev_keep(int ev){
   switch(ev){
     case EV_REL: case EV_LORE: case EV_CHARSELCHAT: case EV_START:
@@ -392,7 +404,7 @@ void ss2comm_reset(void){
   st_won=st_lost=st_resultDone=0;
   st_myR=st_opR=0; st_roundN=1; st_fb=st_longSaid=st_dblLow=0;
   st_fHp1=st_fHp2=0; st_settled=0;
-  blk_boot=-1; blk_moved=0; st_survSaid=-1; st_streakSaid=-1; surv_seen=-1; surv_live=0;
+  blk_boot=-1; blk_moved=0; st_survSaid=-1; st_streakSaid=-1; surv_seen=-1; surv_live=0; st_oppGand=0;
   memset(anec_at,0,sizeof anec_at); memset(weap_at,0,sizeof weap_at);
   memset(anecv_used, 0, sizeof anecv_used);
   ref_next=0; intro_beat1_done=intro_beat2_done=0; intro_shout_done=0; plate_at=0; plate2_at=0; plate_char=-1; ref_flash=0; ref_ttl=180; st_lastFightF=0; ref_thump_pend=0;
@@ -556,7 +568,8 @@ static int emit_ex(int ev, int vsel, int n1, int n2, const char *who){
        부르게 하려고 열었다 (제보: 「상대를 인지하고 뱉는 느낌이 없다. 모든 말에 엮어라」).
        표 밖 개체(간다라류)면 「상대」라 부른다. 조사는 fill_name 이 받침 보고 고친다. */
     if(!who) who = (st_oppChar>=0 && st_oppChar<15 && ROST2SPK[st_oppChar]!=cm_spk)
-               ? CHARNAME[st_oppChar] : "상대";   /* 화자=상대(거울)면 제 이름 대신 「상대」 */
+               ? CHARNAME[st_oppChar]
+               : (st_oppGand ? "간다라" : "상대");   /* 거울이면 「상대」, 간다라는 간다라라고 부른다(제보) */
     fill_name(outbuf,sizeof(outbuf),fmt,who);
   }
   else if(strstr(fmt,"%d")){
@@ -621,15 +634,32 @@ static void flow_reset(int newMatch){
 /* 설명 대사(썰·무기 소회)에 주어가 없으면 누구 얘기인지 모른다
    (제보: 「캐릭터 설명할 때도 누구 설명인지 명사를 넣어야지 툭 내뱉고 치운다」).
    문장에 그 캐릭터 이름이 이미 있으면 그대로, 없으면 「이름 — 」을 앞에 박는다. */
-static int say_about(int ch, const char *t){
-  char b[192];
+/* 뱅크 썰은 위키체(「…를 베었다」)라 화자 말투와 어긋난다(제보: 「말투 싱크가 안 맞는다」).
+   「…다」로 끝나는 문장은 화자 말꼬리를 붙여 전언(들은 이야기)으로 바꾼다 —
+   「베었다」→「베었다고 하더군요」. 사실은 그대로, 전달만 화자 것. */
+static const char *const SPK_TAIL[SS2COMM_SPK_N] = {
+  "고 하더군",      /* 하오마루 */  "고 해요",        /* 나코루루 */
+  "고 들었다",      /* 한조 */      "고 들었다!",     /* 갈포드 */
+  "고 해",          /* 리무루루 */  "고 하더군. 쿠쿡",/* 겐주로 */
+  "고 하더군… 콜록",/* 우쿄 */      "고 합니다",      /* 샬롯 */
+  "고 하더군",      /* 쥬베이 */    "고 하더라",      /* 카즈키 */
+  "고 들었다",      /* 소게츠 */    "고 전해진다",    /* 아수라 */
+  "고, 들었어",     /* 시키 */      "고 하더군요",    /* 모로즈미 */
+  "고 하더구나"     /* 유가 */
+};
+static int say_about2(int ch, const char *t, int voiced){
+  char b[224]; size_t n;
+  const char *pre = "", *dash = "", *tail = "";
   if(!t) return 0;
-  if(ch >= 0 && ch < 15 && !strstr(t, CHARNAME[ch])){
-    snprintf(b, sizeof b, "%s — %s", CHARNAME[ch], t);
-    return emits(EV_LORE, b);
-  }
-  return emits(EV_LORE, t);
+  if(ch >= 0 && ch < 15 && !strstr(t, CHARNAME[ch])){ pre = CHARNAME[ch]; dash = " — "; }
+  n = strlen(t);
+  if(!voiced && n >= 3 && !memcmp(t + n - 3, "\xEB\x8B\xA4", 3))   /* '다' 로 끝난다 */
+    tail = SPK_TAIL[cm_spk];
+  if(!*pre && !*tail) return emits(EV_LORE, t);
+  snprintf(b, sizeof b, "%s%s%s%s", pre, dash, t, tail);
+  return emits(EV_LORE, b);
 }
+static int say_about(int ch, const char *t){ return say_about2(ch, t, 1); }
 static int say_anec(int ch){
   int i, n = 0;
   if(ch < 0 || ch >= 15) return 0;
@@ -644,7 +674,7 @@ static int say_anec(int ch){
     const char *t = ANEC[ch][(anec_at[ch] + i) % n];
     if(!t) continue;
     anec_at[ch] = (unsigned char)((anec_at[ch] + i + 1) % n);
-    return say_about(ch, t);
+    return say_about2(ch, t, 0);
   }
   return 0;
 }
@@ -659,7 +689,7 @@ static int say_weap(int ch){
   if(!n) return 0;
   { const char *t = WEAP[ch][weap_at[ch] % n];
     weap_at[ch] = (unsigned char)((weap_at[ch] + 1) % n);
-    return t ? say_about(ch, t) : 0; }
+    return t ? say_about2(ch, t, 0) : 0; }
 }
 /* 쌓인 모양이 임계에 닿으면 한 마디. 한 번에 한 종류만 낸다. */
 static void flow_check(void){
@@ -783,9 +813,17 @@ static int blk_char(int blk){
    표 밖 마물(-1)로 떨어뜨린다 — 심판이 안 서고 마물 관계대사가 나간다. */
 static int opp_read(void){
   int id = rd(OFF_OPPID);
-  if(id < 0 || id > 14) return -1;
-  if(id != 14 && rd(OFF_BOSS)) return -1;
-  return id;
+  /* 스토리 전체 강제 주행으로 전수 실측(아수라 스토리):
+       정규전은 보스기 0 (아수라도 8/보스기0 으로 온다),
+       고정 보스전은 **로스터 번호 그대로** + 보스기 1 (시키 13/보스기1 실측 —
+       예전 규칙은 이걸 마물로 오인했다),
+       개체 19 + 보스기 = 그림자 아수라 (제보: 「아수라한테 지고 리트라이했는데
+       마물로 인지함」 — 유저에겐 그냥 아수라다),
+       간다라만 아수라 자리(8) + 보스기 1 로 온다 (stage 6 실측). */
+  if(id == 19) return 8;                      /* 그림자 아수라 — 아수라로 부른다 */
+  if(id < 0 || id > 14) return -1;            /* 표 밖 개체 */
+  if(id == 8 && rd(OFF_BOSS)) return -1;      /* 간다라 — 아수라 자리에 보스기로 온다 */
+  return id;                                  /* 보스기가 서도 로스터면 그 사람(시키 보스전) */
 }
 /* 간다라는 로스터 밖 중간보스다. 해설자 15명에도 없다.
    따로 알아보게 해 둔다 — 유가만 제 물건이라 아는 척을 한다. */
@@ -962,6 +1000,7 @@ const char *ss2comm_frame(void){
       flow_reset(1);                              /* v0.7 관전 기억 — 매치 통째로 */
       st_myChar  = blk_char(rd(OFF_BLK1));
       st_oppChar = opp_read();
+      st_oppGand = (rd(OFF_OPPID) == 8 && rd(OFF_BOSS) != 0);
       /* 판을 여는 건 **심판 하나**다. 예전에는 여기서 심판 구호 + EV_START(「하오마루 대
          겐주로…」) + 관계 대사가 한꺼번에 몰려, 두 칸짜리 대기열이 막히면서
          **흐름 대사가 통째로 버려졌다**(test_flow 6개 실패). 제보도 같았다 —
@@ -1043,11 +1082,11 @@ const char *ss2comm_frame(void){
          한참 들여다보는 동안 통째로 조용했다 — 제보: 「카드 고를 때 왜 닥치고 있노」.
          고르는 화면(2 캐릭터 · 4 검질 · 6 카드)에서는 사담과 **썰**을 번갈아 낸다.
          카드 그림을 보고 있을 때 제 캐릭터 이야기를 듣는 게 제일 어울린다. */
-      int picking = (scr==2 || scr==4 || scr==6);
+      int picking = (mode==MD_MENU) && (scr==2 || scr==4);   /* 문구·카드 화면은 제외 — 카드 땐 쉰다(제보) */
       if(!st_selChatAt) st_selChatAt=cm_f;
       if(!st_menuAt)    st_menuAt=cm_f;
       if(picking){
-        if(cm_f > hush_until && cm_f - st_selChatAt > 420){
+        if(cm_f > hush_until && cm_f - st_selChatAt > 600){   /* 10초 — 말수 축소(제보) */
           int said;
           st_selChatAt = cm_f; st_selChatN++;
           said = (st_selChatN & 1) ? emit(EV_CHARSELCHAT) : 0;
@@ -1060,7 +1099,7 @@ const char *ss2comm_frame(void){
             if(me < 0 || !say_anec(me)) emit(EV_CHARSELCHAT);
           }
         }
-      }else if(scr<8 && cm_f > hush_until && cm_f - st_menuAt > 420){
+      }else if(mode==MD_MENU && scr<8 && scr!=6 && cm_f > hush_until && cm_f - st_menuAt > 600){
         st_menuAt = cm_f;
         if(!emit(EV_MENUIDLE)) emit(EV_MUSE_M);
       }
@@ -1086,6 +1125,7 @@ const char *ss2comm_frame(void){
        살아 있으니 여기서 주워 담는다. 간다라(표 밖)는 그대로 -1 로 남는다. */
     st_myChar  = blk_char(rd(OFF_BLK1));
     st_oppChar = opp_read();
+    st_oppGand = (rd(OFF_OPPID) == 8 && rd(OFF_BOSS) != 0);
   }
   /* v0.5.6: 승부가 난 뒤의 승리 포즈도 액션ID가 0x180을 넘는다.
      그걸 필살기로 읽어 "온다! 비오의!" 를 뜬금없이 외치던 버그를 여기서 막는다.
@@ -1221,9 +1261,18 @@ out:
         (ref_shown && cm_f - ref_shown <= (unsigned)(ref_ttl>0?ref_ttl:180)) ||
         plate_at || plate2_at ||                     /* 팻말 호명(이름→훌륭하오)이 남아 있다 */
         (mode==MD_MENU && scr>=8 && intro_refok));   /* 인트로 안무(호명~승부!) 화면 전체 */
-    /* 제보: 「심판 있을 때는 심판 코멘트 사이에 끼지 마라」 — 구호와 구호 **사이 틈**
-       (호명→자아→N회전, 한 판!→이름→훌륭하오)에 캐릭터 줄이 비집고 들어왔다.
-       안무가 도는 동안은 통째로 심판의 칸이다. 캐릭터 줄은 큐에서 기다렸다 뒤에 나온다. */
+    /* 제보: 「심판 있을 때는 심판 코멘트 사이에 끼지 마라」 — 안무가 도는 동안은
+       통째로 심판의 칸이다. 그리고 그 사이 삭은 반응은 **버린다** —
+       안무 끝나고 KO 반응을 뒤늦게 뱉었다(제보: 「밀린 대사는 치우는 걸로」). */
+    while(q_cnt){
+      unsigned pr  = ev_prio(q[q_head].ev);
+      unsigned lim = pr >= 2 ? Q_STALE_BIG : pr >= 1 ? Q_STALE_MID : Q_STALE;
+      if(ref_busy && !ev_resultish(q[q_head].ev) && lim > Q_STALE_MID)
+        lim = Q_STALE_MID;   /* 점유 중엔 순간 반응은 6초 컷 — 결과 계열은 예외 */
+      if(cm_f - q[q_head].at <= lim) break;
+      flow_unsay(q[q_head].ev);
+      q_head = (q_head+1)%QN; q_cnt--;
+    }
     if(ref_busy) return 0; }
   /* 아무도 말하지 않고 조용하면 화자가 혼잣말 — 전투 6초 / 그 밖 3초 */
   if(!q_cnt && cm_f >= q_next){
@@ -1237,9 +1286,13 @@ out:
     /* 두 단계로 본다. **썰이 혼잣말보다 먼저** 나와야 한다 —
        6초쯤 비면 상대 이야기를 풀고, 그래도 8초를 넘기면 그때 혼잣말이다.
        (전에는 15초 하나뿐이라 실제로는 아무 말도 안 나왔다. 제보: 「빌 때 아깝다」) */
-    unsigned anecN = (mode==MD_BATTLE) ? 360 : 240;   /* 6초 / 4초 */
-    unsigned need  = (mode==MD_BATTLE) ? 480 : 300;   /* 8초 / 5초 */
-    if(cm_f > 300 && quiet > anecN && cm_f > hush_until && !st_ko){ /* KO 연출 중엔 잡담 금지 */
+    unsigned anecN = (mode==MD_BATTLE) ? 360 : 420;   /* 6초 / 7초 — 비전투는 말수를 줄인다(제보) */
+    unsigned need  = (mode==MD_BATTLE) ? 480 : 600;   /* 8초 / 10초 */
+    /* 잡담 필러는 **진짜 메뉴(카드 화면 제외)와 공방 중에만** 돈다.
+       문구·스토리·카드 화면에서 썰이 쏟아졌다(제보: 「스토리 볼 때 딴소리 오지게 함」
+       「카드 획득 같은 중간 이벤트 때는 쉬라」). */
+    int fillok = (mode==MD_MENU && scr != 6) || (mode==MD_BATTLE && scr >= 8);
+    if(fillok && cm_f > 300 && quiet > anecN && cm_f > hush_until && !st_ko){
       /* 상대 이야기를 한 번 풀고, 다음 차례엔 내 편 이야기. 번갈아 간다. */
       static unsigned char turn;
       /* 메뉴에서는 아직 매치가 안 잡혀 st_myChar 가 비어 있다. 램에서 바로 읽는다 —
@@ -1895,6 +1948,10 @@ void ss2comm_draw(uint16_t *fb, int pitch_px, int w, int h){
   if(band){
     draw_ref_strip(fb, pitch_px, w, h, bandTop);   /* 심판이 먼저 — 해설창을 같이 쓴다 */
     if(ref_drawn_now) return;                      /* 이 프레임의 창은 쿠로코의 것 */
+    /* 안무(팻말 대기·인트로)가 도는 동안 캐릭터 잔상 밴드를 그리지 않는다 —
+       구호 사이마다 캐릭터 얼굴이 들어왔다 나가며 껌뻑였다(제보). */
+    if(ref_enabled && (ref_has || plate_at || plate2_at ||
+                       (p_mode==MD_MENU && p_scr>=8 && intro_refok))) return;
   }
   if(!line || age > CM_TTL){
     /* 예전에는 여기서 창을 통째로 꺼 버렸다 — 화자는 그대로인데 2.5초마다
@@ -2000,6 +2057,22 @@ void ss2comm_draw(uint16_t *fb, int pitch_px, int w, int h){
    전투 중: 왼쪽 = 내 캐릭터, 오른쪽 = 상대 (표 밖 개체는 「마물」 글자만).
    그 밖:   왼쪽 = 해설자, 오른쪽 = 심판.
    한 번에 기둥 하나를 그린다 — 32비트 화면은 기둥별로 변환해 얹기 좋게. */
+/* 기둥 바탕감 — 게임 화면의 좌우 가장자리 16줄을 매 프레임 받아 둔다.
+   기둥은 이걸 거울로 늘여 어둡게 깔아 스테이지가 옆으로 번져 보인다
+   (제보: 「아트웍 배경을 땡겨올 수 없을까 그럴듯하게」). 배포물엔 그림이 없다. */
+#define SIDE_SRC_W 16
+static uint16_t      side_src[2][SIDE_SRC_W * 152];
+static unsigned char side_src_ok;
+void ss2comm_side_feed(const uint16_t *left, const uint16_t *right, int pitch_px){
+  int x, y;
+  if(!left || !right){ side_src_ok = 0; return; }
+  for(y = 0; y < 152; y++)
+    for(x = 0; x < SIDE_SRC_W; x++){
+      side_src[0][y*SIDE_SRC_W + x] = left [y*pitch_px + x];
+      side_src[1][y*SIDE_SRC_W + x] = right[y*pitch_px + x];
+    }
+  side_src_ok = 1;
+}
 void ss2comm_side(uint16_t *fb, int pitch_px, int w, int h, int right){
   int x, y, ch, battle;
   const char *nm;
@@ -2010,19 +2083,34 @@ void ss2comm_side(uint16_t *fb, int pitch_px, int w, int h, int right){
     int rc;
     if(battle){
       rc = right ? st_oppChar : st_myChar;
-      nm = (rc >= 0) ? CHARNAME[rc] : (right ? "마물" : 0);
+      nm = (rc >= 0) ? CHARNAME[rc] : (right ? (st_oppGand ? "간다라" : "마물") : 0);
       ch = (rc >= 0 && rc < 15) ? ROST2SPK[rc] : -1;
     }else{
       ch = -1; nm = 0;   /* 아직 아무 판도 못 봤다 — 무늬만. 해설자를 바꿔도 기둥은 안 바뀐다 */
     }
   }
-  /* 바탕 — 짙은 바탕에 성근 마름모 격자. 게임보다 어두워야 눈을 안 뺏는다 */
-  for(y = 0; y < h; y++)
-    for(x = 0; x < w; x++){
-      uint16_t v = 0x0841;
-      if(((x + y) & 15) == 7 || ((x - y) & 15) == 7) v = 0x18E3;
-      fb[y*pitch_px + x] = v;
+  /* 바탕 — 게임 가장자리를 거울로 늘여 반쯤 어둡게(스테이지가 옆으로 번진 느낌).
+     아직 게임 화면을 못 받았으면 예전 마름모 격자로. */
+  if(side_src_ok){
+    const uint16_t *src = side_src[right ? 1 : 0];
+    int gtop = h - 152; if(gtop < 0) gtop = 0;
+    for(y = 0; y < h; y++){
+      int gy = y - gtop; if(gy < 0) gy = 0; if(gy > 151) gy = 151;
+      for(x = 0; x < w; x++){
+        int sx = right ? (SIDE_SRC_W - 1 - x * SIDE_SRC_W / w)
+                       : ((w - 1 - x) * SIDE_SRC_W / w);
+        uint16_t v = src[gy * SIDE_SRC_W + sx];
+        fb[y*pitch_px + x] = (uint16_t)((v >> 1) & 0x7BEF);   /* 절반 밝기 */
+      }
     }
+  }else{
+    for(y = 0; y < h; y++)
+      for(x = 0; x < w; x++){
+        uint16_t v = 0x0841;
+        if(((x + y) & 15) == 7 || ((x - y) & 15) == 7) v = 0x18E3;
+        fb[y*pitch_px + x] = v;
+      }
+  }
   /* 게임과 맞닿는 모서리에 금줄 */
   { int gx  = right ? 0 : w - 1;
     int gx2 = right ? 1 : w - 2;

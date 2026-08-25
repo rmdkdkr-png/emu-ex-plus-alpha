@@ -111,9 +111,14 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 			ss2comm_draw(fb + ss2SideW, mFullPix.pitchPx(), ss2GameW, ss2GameH);
 		if(sides)
 		{
+			/* 기둥 바탕감 — 게임 화면 좌우 가장자리를 엔진에 준다(앰비언트 배경) */
+			int gameTop = ss2BandOn() ? ss2BandH : 0;
+			auto pitch = mFullPix.pitchPx();
+			ss2comm_side_feed(fb + gameTop*pitch + ss2SideW,
+			                  fb + gameTop*pitch + ss2SideW + ss2GameW - 16, pitch);
 			/* 양옆 아트웍 기둥 — 그림은 엔진이 사용자 롬에서 굽는다 */
-			ss2comm_side(fb, mFullPix.pitchPx(), ss2SideW, totalH, 0);
-			ss2comm_side(fb + ss2SideW + ss2GameW, mFullPix.pitchPx(), ss2SideW, totalH, 1);
+			ss2comm_side(fb, pitch, ss2SideW, totalH, 0);
+			ss2comm_side(fb + ss2SideW + ss2GameW, pitch, ss2SideW, totalH, 1);
 		}
 	}
 	else
@@ -136,6 +141,15 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 		}
 		if(sides)
 		{
+			/* 32비트 화면 — 게임 가장자리를 565 로 눌러 엔진에 준다(앰비언트 배경) */
+			static uint16_t edge[2][16 * ss2GameH];
+			int gameTop = ss2BandOn() ? ss2BandH : 0;
+			for(int r = 0; r < 2; r++)
+			{
+				IG::MutablePixmapView e{{{16, ss2GameH}, IG::PixelFmtRGB565}, edge[r]};
+				e.writeConverted(mFullPix.subView({r ? ss2SideW + ss2GameW - 16 : ss2SideW, gameTop}, {16, ss2GameH}));
+			}
+			ss2comm_side_feed(edge[0], edge[1], 16);
 			for(int r = 0; r < 2; r++)
 			{
 				ss2comm_side(ss2BandScratch, ss2SideW, ss2SideW, totalH, r);
