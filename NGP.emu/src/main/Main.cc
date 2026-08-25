@@ -187,6 +187,17 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 	bool sides = ss2SidesOn();
 	if(!ss2BandOn() && !sides)
 		return mSurfacePix;                 /* 띠도 기둥도 없음 — 게임 화면만 올린다 */
+	if(sides && ss2comm_side_wantbake())
+	{
+		/* 기둥 배경을 스테이지 타일로 굽는다 — 매치가 설 때만(엔진이 예약).
+		   K1GE 공간을 read8 로 떠서 넘긴다(스크롤2 타일맵·패턴·팔레트·스크롤). */
+		using namespace MDFN_IEN_NGP;
+		static uint8_t m2[2048], cr[8192], pl[512];
+		for(int i = 0; i < 2048; i++) m2[i] = NGPGfx->read8(0x9800 + i);
+		for(int i = 0; i < 8192; i++) cr[i] = NGPGfx->read8(0xA000 + i);
+		for(int i = 0; i < 512; i++)  pl[i] = NGPGfx->read8(0x8200 + i);
+		ss2comm_side_tiles(m2, cr, pl, NGPGfx->read8(0x8034), NGPGfx->read8(0x8035));
+	}
 	int totalH = ss2GameH + (ss2BandOn() ? ss2BandH : 0);   /* 띠 없이 기둥만도 된다 */
 	if(mFullPix.format().bytesPerPixel() == 2)
 	{
@@ -195,12 +206,8 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 			ss2comm_draw(fb + ss2SideW, mFullPix.pitchPx(), ss2GameW, ss2GameH);
 		if(sides)
 		{
-			/* 기둥 바탕감 — 게임 화면 좌우 가장자리를 엔진에 준다(앰비언트 배경) */
-			int gameTop = ss2BandOn() ? ss2BandH : 0;
 			auto pitch = mFullPix.pitchPx();
-			ss2comm_side_feed(fb + gameTop*pitch + ss2SideW,
-			                  fb + gameTop*pitch + ss2SideW + ss2GameW - 16, pitch);
-			/* 양옆 아트웍 기둥 — 그림은 엔진이 사용자 롬에서 굽는다 */
+			/* 양옆 아트웍 기둥 — 그림은 엔진이 롬·VRAM에서 굽는다 */
 			ss2comm_side(fb, pitch, ss2SideW, totalH, 0);
 			ss2comm_side(fb + ss2SideW + ss2GameW, pitch, ss2SideW, totalH, 1);
 		}
@@ -225,15 +232,6 @@ IG::MutablePixmapView NgpSystem::ss2CommitPix()
 		}
 		if(sides)
 		{
-			/* 32비트 화면 — 게임 가장자리를 565 로 눌러 엔진에 준다(앰비언트 배경) */
-			static uint16_t edge[2][16 * ss2GameH];
-			int gameTop = ss2BandOn() ? ss2BandH : 0;
-			for(int r = 0; r < 2; r++)
-			{
-				IG::MutablePixmapView e{{{16, ss2GameH}, IG::PixelFmtRGB565}, edge[r]};
-				e.writeConverted(mFullPix.subView({r ? ss2SideW + ss2GameW - 16 : ss2SideW, gameTop}, {16, ss2GameH}));
-			}
-			ss2comm_side_feed(edge[0], edge[1], 16);
 			for(int r = 0; r < 2; r++)
 			{
 				ss2comm_side(ss2BandScratch, ss2SideW, ss2SideW, totalH, r);
