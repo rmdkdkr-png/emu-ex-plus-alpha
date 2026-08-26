@@ -1,3 +1,24 @@
+> ## 🔱 이 저장소는 포크입니다 — NGPcustumSP
+>
+> Robert Broglia 의 [emu-ex-plus-alpha](https://github.com/Rakashazi/emu-ex-plus-alpha) 를
+> 갈라 나온 것으로, **NGP.emu 에만** 네오지오 포켓 『사무라이 쇼다운!2』 전용 층을 얹었습니다 —
+> 한국어 캐릭터 해설, 원버튼 필살기, 양옆 일러스트 기둥.
+>
+> | | |
+> |---|---|
+> | 앱 받는 곳 | https://github.com/rmdkdkr-png/CustumApKS |
+> | 해설·필살기 엔진 소스 | https://github.com/rmdkdkr-png/ss2-sp-core |
+> | 손댄 곳 | `NGP.emu/` 아래 — `src/ss2comm/`(엔진 사본), `src/main/`, `metadata/conf.mk`, `res/icons/` |
+>
+> 앱 ID 를 `com.rmdkdkr.ngpemu.ss2` 로 바꿔 스토어판과 나란히 깔리게 했고,
+> 표시명도 **NGPcustumSP** 로 따로 붙였습니다. 원작 NGP.emu·NEO.emu 는 Robert Broglia 가
+> 스토어에서 파는 앱입니다 — 그 앱들을 대체하려는 물건이 아니며,
+> 이쪽은 사쇼!2 롬이 아니면 아예 열리지 않도록 잠가 두었습니다.
+>
+> **GPL v3** 을 그대로 따릅니다. 아래는 원본 README 입니다.
+
+---
+
 # EX Emulators
 
 The EX Emulator project is a series of emulators primarily targeting Android and Linux with a minimalist UI 
