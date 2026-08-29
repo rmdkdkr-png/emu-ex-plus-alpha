@@ -19,6 +19,7 @@ module;
 #include <vector>
 #include <cstring>
 #include <ss2sp/ss2sp.h>
+#include <svcsp/svcsp.h>
 #include <ss2comm/ss2comm.h>
 #include <mednafen/state-driver.h>
 #include <mednafen/MemoryStream.h>
@@ -179,6 +180,9 @@ void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	/* 해설 띠에 그릴 얼굴은 **사용자 롬에서 실행 중에 뽑는다** — 배포물에 그림을 넣지 않는다.
 	   코어판(libretro)에도 같은 줄이 있다. 이 줄이 없으면 띠에 얼굴 자리가 빈다. */
 	ss2comm_set_rom(MDFN_IEN_NGP::ngpc_rom.orig_data, MDFN_IEN_NGP::ngpc_rom.length);
+	svcsp_set_rom(MDFN_IEN_NGP::ngpc_rom.orig_data, MDFN_IEN_NGP::ngpc_rom.length);
+	svcsp_set_engine(1);                        /* SVC 롬이면 모던 조작 — 끄기는 「원버튼 필살기」 옵션 공용 */
+	ss2comm_overlay_spmode(svcsp_rom_ok());     /* 오버레이 SP 페이지가 svcsp 표를 쓴다 */
 	MDFN_IEN_NGP::SetPixelFormat(toMDFNSurface(mSurfacePix).format);
 }
 
@@ -297,7 +301,27 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	   NGP.emu 는 Emulate() 안의 storeB(0x6F82, *chee) 가 주석 처리돼 있고
 	   입력 이벤트 때 직접 쓴다. 그래서 프레임 직전에 여기서 한 번 덮어쓰면
 	   엔진이 만든 커맨드가 그대로 게임에 들어간다. */
-	if(ss2spEnabled)
+	if(ss2spEnabled && svcsp_rom_ok())
+	{	/* ── SVC 모던 조작 — SP 키 = 기술키(방향+SP = 배치 필살기, 짧게 약/길게 강),
+		   기본기 연타 = 자동 콤보(히트 확인 후 초필, 게이지 없으면 필살기).
+		   A/B 기본기는 순정 그대로(탭 약/홀드 강). */
+		MDFN_IEN_NGP::storeB(0x6F82, svcsp_frame_app(inputBuff, spTrig));
+		static int svcSeq{};
+		if(svcsp_disp_seq != svcSeq)
+		{	/* 기술명 토스트 — 해설 알림과 같은 파이프 */
+			svcSeq = svcsp_disp_seq;
+			static std::array<std::array<char, 72>, 4> svcRing{};
+			static unsigned svcRingPos{};
+			auto &slot = svcRing[svcRingPos++ & 3];
+			std::snprintf(slot.data(), slot.size(), "%s", svcsp_last_disp);
+			auto &app = gApp();
+			app.runOnMainThread([&app, msg = slot.data()](ApplicationContext)
+			{
+				app.postMessage(2, false, msg);
+			});
+		}
+	}
+	else if(ss2spEnabled)
 	{
 		ss2sp_set_layout(ss2spLayoutSP);
 		MDFN_IEN_NGP::storeB(0x6F82, ss2sp_frame(inputBuff, spTrig));

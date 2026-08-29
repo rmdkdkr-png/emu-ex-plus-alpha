@@ -10,10 +10,13 @@
 extern "C" {
 #endif
 
-#define SS2COMM_VERSION "1.0.2"   /* SS2 층 버전 — 릴리즈마다 올린다 */
+#define SS2COMM_VERSION "1.1.0"   /* SS2 층 버전 — 릴리즈마다 올린다 */
 void        ss2comm_set_ram(void *p);        /* SS2SP_RAM_POINTER 빌드에서만 필요 */
 void        ss2comm_set_enabled(int on);     /* 코어 옵션 */
-void        ss2comm_set_rom(const void *rom, unsigned len); /* 초상(얼굴)을 사용자 롬에서 그린다 */
+void        ss2comm_set_rom(const void *rom, unsigned len);
+void        ss2comm_toast(const char *text, int frames); /* 기술명 한 줄 표시 (svcsp) */
+void        ss2comm_overlay_spmode(int svc);   /* 1 = SvC — SP 배치가 svcsp 표를 쓴다 */
+void        ss2comm_overlay_bind_extra(const char *name, unsigned char *v); /* 초상(얼굴)을 사용자 롬에서 그린다 */
 void        ss2comm_rom_fix(void *rom, unsigned len);  /* 한글패치 글자 깨짐을 롬 메모리에서 보정 */
 void        ss2comm_overlay_bind(unsigned char *chat, unsigned char *spk, unsigned char *ref,
                                  unsigned char *sides, unsigned char *sbg, unsigned char *vib,
