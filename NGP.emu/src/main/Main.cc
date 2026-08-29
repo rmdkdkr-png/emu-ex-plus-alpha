@@ -169,12 +169,14 @@ void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 {
 	static constexpr size_t maxRomSize = 0x400000;
 	EmuEx::loadContent(*this, mdfnGameInfo, io, maxRomSize);
-	/* SS2 전용판 — 다른 롬은 열지 않는다. 범용 NGP 에뮬로 쓰이면 원작자(EmuEx)의
-	   유료 앱 이익을 침해한다. 헤더 타이틀(0x24 "SAMURAI2")로 판별한다. */
+	/* 전용판 게이트 — 이 앱이 다루는 두 게임(SS2·SVC)만 연다. 범용 NGP 에뮬로
+	   쓰이면 원작자(EmuEx)의 유료 앱 이익을 침해한다. 헤더 타이틀(0x24)로 판별. */
 	if(MDFN_IEN_NGP::ngpc_rom.length < 0x30 ||
-	   memcmp(MDFN_IEN_NGP::ngpc_rom.data + 0x24, "SAMURAI2", 8) != 0)
+	   (memcmp(MDFN_IEN_NGP::ngpc_rom.data + 0x24, "SAMURAI2", 8) != 0 &&
+	    memcmp(MDFN_IEN_NGP::ngpc_rom.data + 0x24, "SNKvsCAPCOM1", 12) != 0))
 	{
-		throw std::runtime_error{"SS2 커스텀판입니다 — 사무라이 쇼다운!2 롬만 열 수 있습니다.\n"
+		throw std::runtime_error{"SS2·SVC 커스텀판입니다 — 사무라이 쇼다운!2 또는\n"
+		                         "SNK vs. Capcom(격투의 달인) 롬만 열 수 있습니다.\n"
 		                         "다른 게임은 정식 NGP.emu 앱을 이용해 주세요."};
 	}
 	/* 해설 띠에 그릴 얼굴은 **사용자 롬에서 실행 중에 뽑는다** — 배포물에 그림을 넣지 않는다.
