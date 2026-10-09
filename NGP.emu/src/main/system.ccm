@@ -84,6 +84,7 @@ enum NgpConfigKey
 	CFGKEY_SS2COMM_ENABLED = 274, CFGKEY_SS2COMM_SPK = 275, CFGKEY_SS2COMM_DRAW = 276,
 	CFGKEY_SS2COMM_VIBRATE = 277, CFGKEY_SS2COMM_REF = 278, CFGKEY_SS2COMM_SIDES = 279,
 	CFGKEY_SS2COMM_SCENECAP = 280, CFGKEY_SS2COMM_SIDEBG = 281,
+	CFGKEY_SS2_FRAMEGEN = 282,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -163,6 +164,13 @@ public:
 	/* 띠를 켜면 세로가 32줄 늘어난다 — 화면비를 그만큼 되돌린다.
 	   PCE.emu 가 보이는 줄 수를 바꿀 때 쓰는 것과 같은 자리다. */
 	double videoAspectRatioScale() const;
+	/* ── 프레임 생성 (120Hz) ──
+	   「프레임 타이밍 → 화면 주사율 덮어쓰기 = 120Hz」로 두면 vsync 두 번에 한 번은 빈 슬롯이 된다.
+	   그 슬롯에서 상태를 저장한 채 다음 프레임을 미리 돌려(소리 뮤트) 현재↔다음 중간 자리에
+	   현재 프레임의 타일을 다시 그려 올린다 — 추가 지연 0. 코어판 ss2fg 와 같은 엔진. */
+	bool ss2FrameGen{true};
+	bool interFrame(EmuSystemTaskContext, EmuVideo &);
+	bool ss2PredictFrame();
 	bool ss2BandOn() const { return ss2commEnabled || ss2commRef; }   /* 어느 쪽이든 켜면 띠가 선다 */
 	bool ss2SidesOn() const { return ss2commSides; }   /* 기둥은 챗/심판과 독립 — 꺼도 대진 추적은 돈다 */
 	void ss2SyncSurface();              /* 게임이 그려질 자리를 띠 유무에 맞춘다 */

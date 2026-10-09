@@ -397,6 +397,18 @@ bool EmuSystemTask::advanceFrames(FrameParams frameParams)
 	}
 	if(!frameInfo.advanced)
 	{
+		if(sys.frameRateMultiplier == 1.)
+		{
+			/* 빈 vsync 슬롯(120Hz 화면에 60fps 시스템) — 시스템이 중간 프레임(프레임 생성)을 올릴 수 있으면 그것을 */
+			bool shouldWait = setWaitForPresent();
+			if(sys.interFrame({this}, app.video))
+			{
+				if(shouldWait)
+					framePresentedSem.acquire();
+				return true;
+			}
+			waitingForPresent_ = false;
+		}
 		if(enableBlankFrameInsertion)
 		{
 			viewCtrl.drawBlankFrame = true;

@@ -21,6 +21,7 @@ module;
 #include <ss2sp/ss2sp.h>
 #include <svcsp/svcsp.h>
 #include <ss2comm/ss2comm.h>
+#include <ss2fg/ss2fg.h>
 #include <mednafen/state-driver.h>
 #include <mednafen/MemoryStream.h>
 #include <ngp/neopop.h>
@@ -391,6 +392,74 @@ void system_io_flash_write(uint8_t* buffer, uint32 len)
 	auto saveStr = saveFilename(gApp());
 	NgpSystem::log.info("writing flash:{}", saveStr);
 	FileUtils::writeToUri(gAppContext(), saveStr, {buffer, len});
+}
+
+}
+
+/* ── 프레임 생성 (120Hz) — 코어판 libretro.c 의 fg_predict 와 같은 절차 ──
+   예측 프레임용 가벼운 스냅샷: 소리·플래시 섹션은 뺀다(예측 중 바뀌지 않게 막는다) +
+   StateAction 밖의 정적 변수들(Z80 인터럽트선, 직렬 버퍼·플래시 커맨드 플래그). */
+extern "C" int ngp_fg_mute;          /* sound.cpp  — 예측 프레임 중 소리 쓰기·플러시 무시 */
+extern "C" int ngp_fg_predict;       /* mem.cpp    — 예측 프레임 중 롬/플래시 쓰기 차단 */
+extern "C" int ngp_fg_state_skip;    /* neopop.cpp — StateAction 에서 건너뛸 섹션(1 소리, 2 플래시) */
+extern "C" void ngp_mem_fg_extras(uint8_t *buf, int load);
+extern "C" int ngp_z80_iline_get(void);
+extern "C" void ngp_z80_iline_set(int v);
+
+namespace EmuEx
+{
+
+static Mednafen::MemoryStream *ss2FgStateStream{};
+
+bool NgpSystem::ss2PredictFrame()
+{
+	using namespace Mednafen;
+	uint8_t extras[8];
+	int ilineSave = ngp_z80_iline_get();
+	if(!ss2FgStateStream)
+		ss2FgStateStream = new MemoryStream(65536, -1);
+	ngp_fg_state_skip = 3;
+	ss2FgStateStream->setSize(0);
+	ss2FgStateStream->seek(0, SEEK_SET);
+	MDFNSS_SaveSM(ss2FgStateStream);
+	ngp_mem_fg_extras(extras, 0);
+
+	/* 입력은 램에 든 마지막 값 그대로(붙잡고 있다고 가정). 그림은 안 그린다(skip) — 캡처만 */
+	EmulateSpecStruct espec{};
+	espec.sys = this;
+	espec.video = nullptr;
+	espec.skip = true;
+	auto mSurface = toMDFNSurface(mSurfacePix);
+	espec.surface = &mSurface;
+	ngp_fg_mute = 1; ngp_fg_predict = 1;
+	mdfnGameInfo.Emulate(&espec);
+	ngp_fg_mute = 0; ngp_fg_predict = 0;
+
+	/* 그림은 실제 N(prev), 위치만 예측 N+1(cur) 쪽으로 반 — 없는 그림은 절대 안 나온다 */
+	int ok = ss2fg_render_ex(ss2fg_prev(), ss2fg_cur(), 128, mSurfacePix.data(), mSurfacePix.pitchPx(),
+		mSurfacePix.format().bytesPerPixel(), MDFN_IEN_NGP::NGPGfx->colorMap());
+
+	ss2FgStateStream->seek(0, SEEK_SET);
+	MDFNSS_LoadSM(ss2FgStateStream);
+	ngp_fg_state_skip = 0;
+	ngp_mem_fg_extras(extras, 1);
+	ngp_z80_iline_set(ilineSave);
+	ss2fg_capture_pop();                 /* 예측 프레임 캡처를 무른다 */
+	return ok != 0;
+}
+
+/* 빈 vsync 슬롯 — EmuSystemTask::advanceFrames 가 advanced==0 일 때 부른다 */
+bool NgpSystem::interFrame(EmuSystemTaskContext taskCtx, EmuVideo &video)
+{
+	if(!ss2FrameGen || !hasContent() || !ss2fg_cur() || ss2comm_overlay_active())
+		return false;
+	/* 합성이 안 되면(표시 중 VRAM 쓰기·흑백 모드) 실제 프레임을 그대로 한 번 더 올린다 */
+	ss2PredictFrame();
+	ss2comm_draw_hold(1);                /* 띠·토스트는 다시 그리되 수명은 실제 프레임에서만 줄인다 */
+	auto pix = ss2CommitPix();
+	ss2comm_draw_hold(0);
+	video.startFrameWithFormat(taskCtx, pix);
+	return true;
 }
 
 }

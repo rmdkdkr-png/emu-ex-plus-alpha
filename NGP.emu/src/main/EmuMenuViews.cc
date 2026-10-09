@@ -337,6 +337,19 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		}
 	};
 
+	/* 프레임 생성 — 120Hz 화면에서 빈 vsync 슬롯에 중간 프레임을 넣는다.
+	   프레임 타이밍 옵션의 「화면 주사율 덮어쓰기」를 120Hz 로 두어야 슬롯이 생긴다. */
+	BoolMenuItem ss2FrameGen
+	{
+		"프레임 생성 (120Hz, 주사율 덮어쓰기 120 필요)", attachParams(),
+		system().ss2FrameGen,
+		"끔", "켬",
+		[this](BoolMenuItem &item, View &, Input::Event e)
+		{
+			system().ss2FrameGen = item.flipBoolValue(*this);
+		}
+	};
+
 	/* 버전 정보 — 앱 버전은 metadata/conf.mk 의 android_metadata_version 과 같이 올린다 */
 	TextMenuItem ss2Version
 	{
@@ -344,7 +357,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		[this]()
 		{
 			app().postMessage(6, false,
-				"NGPcustumSP 1.5.85-SS2-1.0.2\n"
+				"NGPcustumSP 1.5.85-SS2-1.1.0 (프레임 생성 120Hz)\n"
 				"해설 엔진 SS2comm v" SS2COMM_VERSION
 				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL");
 		}
@@ -365,6 +378,7 @@ public:
 		item.emplace_back(&ss2commSides);
 		item.emplace_back(&ss2commSceneCap);
 		item.emplace_back(&ss2commVibrate);
+		item.emplace_back(&ss2FrameGen);
 		item.emplace_back(&ss2Version);
 		item.emplace_back(&saveFilenameType);
 	}

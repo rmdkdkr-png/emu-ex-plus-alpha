@@ -193,6 +193,13 @@ void EmuSystem::reset(EmuApp &app, ResetMode mode)
 	static_cast<MainSystem*>(this)->reset(app, mode);
 }
 
+bool EmuSystem::interFrame(EmuSystemTaskContext task, EmuVideo &video)
+{
+	if(&MainSystem::interFrame != &EmuSystem::interFrame)
+		return static_cast<MainSystem*>(this)->interFrame(task, video);
+	return false;
+}
+
 void EmuSystem::renderFramebuffer(EmuVideo &video)
 {
 	if(&MainSystem::renderFramebuffer != &EmuSystem::renderFramebuffer)

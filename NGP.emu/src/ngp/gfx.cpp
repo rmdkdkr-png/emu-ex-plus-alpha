@@ -17,6 +17,7 @@
 #include "gfx.h"
 #include "interrupt.h"
 #include "dma.h"
+#include <ss2fg/ss2fg.h>   /* 프레임 생성 — 스캔라인 레지스터·VRAM 캡처 (코어 gfx.c 와 같은 훅) */
 
 namespace MDFN_IEN_NGP
 {
@@ -68,6 +69,7 @@ void NGPGFX_CLASS::reset(void)
 void NGPGFX_CLASS::power(void)
 {
  reset();
+ ss2fg_reset();
 
  memset(ScrollVRAM, 0, sizeof(ScrollVRAM));
  memset(CharacterRAM, 0, sizeof(CharacterRAM));
@@ -136,6 +138,17 @@ bool NGPGFX_CLASS::draw(MDFN_Surface *surface, bool skip)
 {
 	bool ret = 0;
 
+        /* 프레임 생성 캡처 — 이 줄을 그리는 순간의 지연 레지스터(skip 이어도 기록) */
+        if (raster_line < SCREEN_HEIGHT)
+        {
+                ss2fg_regs r;
+                r.winx = winx; r.winw = winw; r.winy = winy; r.winh = winh;
+                r.s1x = scroll1x; r.s1y = scroll1y; r.s2x = scroll2x; r.s2y = scroll2y;
+                r.spx = scrollsprx; r.spy = scrollspry;
+                r.swap = planeSwap ? 1 : 0; r.bgc = bgc; r.oowc = oowc; r.neg = negative ? 1 : 0;
+                ss2fg_capture_line(raster_line, &r);
+        }
+
         //Draw the scanline
         if (raster_line < SCREEN_HEIGHT && !skip)
         {
@@ -162,6 +175,9 @@ bool NGPGFX_CLASS::draw(MDFN_Surface *surface, bool skip)
         {
                         BLNK = 1;
                         ret = 1;
+                        /* 프레임 생성 캡처 — 표시가 끝난 시점의 VRAM·팔레트·스프라이트표 사본 */
+                        ss2fg_capture_end(ScrollVRAM, CharacterRAM, SpriteVRAM, SpriteVRAMColor, ColorPaletteRAM,
+                                          K2GE_MODE, layer_enable_setting);
 
 			if(CONTROL_INT & 0x80) // (statusIFF() <= 4
 			 TestIntHDMA(5, 0x0B);
@@ -231,6 +247,15 @@ void NGPGFX_CLASS::SetLayerEnableMask(uint64 mask)
 //extern uint32 ngpc_soundTS;
 MDFN_FASTCALL void NGPGFX_CLASS::write8(uint32 address, uint8 data)
 {
+ /* 표시 중(1..151줄 그린 뒤) VRAM 쓰기 — 프레임 끝 사본이 위쪽 줄과 달라지므로 프레임 생성에 알린다 */
+ if(raster_line != 0 && raster_line < SCREEN_HEIGHT)
+ {
+  if(address >= 0x8800 && address <= 0x88ff)      ss2fg_capture_write(SS2FG_DIRTY_SPR);
+  else if(address >= 0x9000 && address <= 0x9fff) ss2fg_capture_write(SS2FG_DIRTY_SCROLL);
+  else if(address >= 0xa000 && address <= 0xbfff) ss2fg_capture_write(SS2FG_DIRTY_CHR);
+  else if((address >= 0x8200 && address <= 0x83ff) || (address >= 0x8c00 && address <= 0x8c3f))
+   ss2fg_capture_write(SS2FG_DIRTY_PAL);
+ }
  //if(address >= 0x8032 && address <= 0x8035)
  // printf("%08x %02x %d\n", address, data, ngpc_soundTS);
 

@@ -47,6 +47,9 @@ class NGPGFX_CLASS
 
  void power(void);
 
+ /* 프레임 생성 합성 렌더러가 현재 표면 포맷의 색 표를 쓴다 */
+ const uint32 *colorMap() const { return ColorMap; }
+
  private:
 
  // TODO: Alignment for faster memset

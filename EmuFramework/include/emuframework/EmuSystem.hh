@@ -166,6 +166,9 @@ public:
 	VController::KbMap vControllerKeyboardMap(VControllerKbMode mode);
 	VideoSystem videoSystem() const;
 	void renderFramebuffer(EmuVideo &);
+	/* 120Hz 화면에 60fps 시스템을 보일 때 비는 vsync 슬롯 — 시스템이 중간 프레임을 만들어 올리면 true.
+	   (NGP.emu 의 프레임 생성이 쓴다. 기본은 아무것도 안 하고 false) */
+	bool interFrame(EmuSystemTaskContext, EmuVideo &);
 	WSize multiresVideoBaseSize() const;
 	double videoAspectRatioScale() const;
 	bool onVideoRenderFormatChange(EmuVideo &, PixelFormat);

@@ -144,3 +144,9 @@ void MDFNNGPCZ80_StateAction(StateMem *sm, const unsigned load, const bool data_
 }
 
 }
+
+/* 프레임 생성 예측 프레임용 — Z80 인터럽트선은 어떤 StateAction 에도 없어 따로 저장·복원한다 */
+extern "C" int ngp_z80_iline_get(void);
+extern "C" void ngp_z80_iline_set(int v);
+int ngp_z80_iline_get(void) { return Mednafen::z80_iline; }
+void ngp_z80_iline_set(int v) { Mednafen::z80_iline = v; }

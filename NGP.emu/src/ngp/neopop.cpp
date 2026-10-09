@@ -233,6 +233,10 @@ static void SetInput(unsigned port, const char *type, uint8 *ptr)
   chee = ptr;
 }
 
+/* 프레임 생성 예측용 가벼운 스냅샷 — StateAction 에서 건너뛸 섹션 (1 소리, 2 플래시). Main.cc 가 켠다 */
+extern "C" int ngp_fg_state_skip;
+int ngp_fg_state_skip = 0;
+
 static void StateAction(StateMem *sm, const unsigned load, const bool data_only)
 {
  SFORMAT StateRegs[] =
@@ -259,12 +263,14 @@ static void StateAction(StateMem *sm, const unsigned load, const bool data_only)
  MDFNSS_StateAction(sm, load, data_only, StateRegs, "MAIN");
  MDFNSS_StateAction(sm, load, data_only, TLCS_StateRegs, "TLCS");
  MDFNNGPCDMA_StateAction(sm, load, data_only);
- MDFNNGPCSOUND_StateAction(sm, load, data_only);
+ if(!(ngp_fg_state_skip & 1))   /* 프레임 생성 예측 스냅샷: 소리는 뮤트라 안 바뀐다 — 로드가 Blip 버퍼를 비우는 것도 피한다 */
+  MDFNNGPCSOUND_StateAction(sm, load, data_only);
  NGPGfx->StateAction(sm, load, data_only);
  MDFNNGPCZ80_StateAction(sm, load, data_only);
  int_timer_StateAction(sm, load, data_only);
  BIOSHLE_StateAction(sm, load, data_only);
- FLASH_StateAction(sm, load, data_only);
+ if(!(ngp_fg_state_skip & 2))   /* 예측 스냅샷: 롬 쓰기를 막으므로 롬 전체 사본은 필요 없다 */
+  FLASH_StateAction(sm, load, data_only);
 
  if(load)
  {

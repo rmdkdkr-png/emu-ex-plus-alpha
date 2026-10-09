@@ -12,6 +12,8 @@ target_sources(ngpemu PRIVATE svcsp/svcsp.c)
 # SS2 캐릭터 해설 엔진 (순수 C, 램 포인터 주입은 위와 같은 매크로를 쓴다).
 # 브라우저판 runner.html 의 commStep() / 코어판 ss2comm.c 와 같은 소스다.
 target_sources(ngpemu PRIVATE ss2comm/ss2comm.c)
+# 프레임 생성(120Hz 중간 프레임 합성) — 코어판 src/ss2fg.c 와 같은 소스. K2GE 캡처·합성 렌더러, mednafen 비의존
+target_sources(ngpemu PRIVATE ss2fg/ss2fg.c)
 target_compile_definitions(ngpemu PRIVATE SS2SP_RAM_POINTER)
 
 target_sources(ngpemu PRIVATE
