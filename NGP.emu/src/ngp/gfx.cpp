@@ -250,11 +250,11 @@ MDFN_FASTCALL void NGPGFX_CLASS::write8(uint32 address, uint8 data)
  /* 표시 중(1..151줄 그린 뒤) VRAM 쓰기 — 프레임 끝 사본이 위쪽 줄과 달라지므로 프레임 생성에 알린다 */
  if(raster_line != 0 && raster_line < SCREEN_HEIGHT)
  {
-  if(address >= 0x8800 && address <= 0x88ff)      ss2fg_capture_write(SS2FG_DIRTY_SPR);
+  if((address >= 0x8800 && address <= 0x88ff) || (address >= 0x8c00 && address <= 0x8c3f))
+   ss2fg_capture_write(SS2FG_DIRTY_SPR);        /* 스프라이트표 + 스프라이트 팔레트 번호(일치 키이자 렌더 팔레트) */
   else if(address >= 0x9000 && address <= 0x9fff) ss2fg_capture_write(SS2FG_DIRTY_SCROLL);
   else if(address >= 0xa000 && address <= 0xbfff) ss2fg_capture_write(SS2FG_DIRTY_CHR);
-  else if((address >= 0x8200 && address <= 0x83ff) || (address >= 0x8c00 && address <= 0x8c3f))
-   ss2fg_capture_write(SS2FG_DIRTY_PAL);
+  else if(address >= 0x8200 && address <= 0x83ff) ss2fg_capture_write(SS2FG_DIRTY_PAL);
  }
  //if(address >= 0x8032 && address <= 0x8035)
  // printf("%08x %02x %d\n", address, data, ngpc_soundTS);
