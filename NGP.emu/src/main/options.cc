@@ -44,6 +44,7 @@ bool NgpSystem::readConfig(ConfigType type, MapIO &io, unsigned key)
 			case CFGKEY_SS2_FRAMEGEN: return readOptionValue(io, ss2FrameGen);
 			case CFGKEY_SS2_FRAMEGEN_MULT: return readOptionValue(io, ss2FrameGenMult);   /* 4 아니면 2배로 다룬다 */
 			case CFGKEY_SS2_RUNAHEAD: return readOptionValue(io, ss2RunAhead, [](auto v){ return v <= 2; });
+			case CFGKEY_SS2_FRAMEGEN_FX: return readOptionValue(io, ss2FrameGenFx, [](auto v){ return v <= 2; });
 			/* CFGKEY_SS2COMM_SIDEBG(281): 폐지 — 미처리로 두면 프레임워크가 건너뛴다 */
 			/* 표시 방식(알림/띠) 고르기는 없앴다. 해설은 늘 띠에 그린다.
 			   옛 설정 파일에 이 키가 남아 있어도 조용히 넘기려고 읽기만 남겨 둔다. */
@@ -71,6 +72,7 @@ void NgpSystem::writeConfig(ConfigType type, FileIO &io)
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2_FRAMEGEN, ss2FrameGen, true);
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2_FRAMEGEN_MULT, ss2FrameGenMult, uint8_t{4});
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2_RUNAHEAD, ss2RunAhead, uint8_t{2});
+		writeOptionValueIfNotDefault(io, CFGKEY_SS2_FRAMEGEN_FX, ss2FrameGenFx, uint8_t{1});
 		{
 			/* 기술 배치 210바이트. 기본값과 같으면 안 쓴다. */
 			Ss2SlotBlob cur{}, def{};

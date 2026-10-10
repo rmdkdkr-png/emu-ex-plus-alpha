@@ -85,6 +85,7 @@ enum NgpConfigKey
 	CFGKEY_SS2COMM_VIBRATE = 277, CFGKEY_SS2COMM_REF = 278, CFGKEY_SS2COMM_SIDES = 279,
 	CFGKEY_SS2COMM_SCENECAP = 280, CFGKEY_SS2COMM_SIDEBG = 281,
 	CFGKEY_SS2_FRAMEGEN = 282, CFGKEY_SS2_FRAMEGEN_MULT = 283, CFGKEY_SS2_RUNAHEAD = 284,
+	CFGKEY_SS2_FRAMEGEN_FX = 285,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -179,6 +180,9 @@ public:
 	/* 런어헤드 — 사무쇼2는 입력이 2~3프레임 뒤에 화면에 나오므로, 실제 N 뒤 N+1·N+2 를 숨겨 돌리고 N+2 의 그림을
 	   보여 준다(코어판 ra_frames/fg_hidden 과 같은 절차). 4배와 같이 돌 때는 보여 주는 시간줄을 앞당긴다. */
 	uint8_t ss2RunAhead{2};             /* 2·1·0 */
+	/* 이펙트·장풍 — 겉모습·몸·물체로 못 정한 이펙트 무리: 1 옮기기(물체 등속·몸에 붙음·테두리 등속) · 2 옮기기+못 정한 것은 반투명 섞기 · 0 끔.
+	   코어판 ngp_framegen_fx 와 같은 엔진(ss2fg_set_fx). 그릴 때마다 엔진에 넘긴다 */
+	uint8_t ss2FrameGenFx{1};
 	int ss2RaFrames() const;            /* 지금 쓸 런어헤드 프레임 수(0 = 안 씀) */
 	bool ss2RaPlain(int ra);            /* 프레임 생성 없이 런어헤드만 — 표면에 N+ra 그림 */
 	bool ss2Hidden(int n, int keep);    /* 입력을 붙잡은 채 n 프레임 숨겨 돌린다, keep 번째 그림은 표면에 남긴다 */

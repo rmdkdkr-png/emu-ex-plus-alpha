@@ -14,6 +14,7 @@
 	along with NGP.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <ss2sp/ss2sp.h>
+#include <ss2fg/ss2fg.h>
 #include <ss2comm/ss2comm.h>
 
 import system;
@@ -382,6 +383,23 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		ss2RunAheadItem
 	};
 
+	/* 이펙트·장풍 — 장풍·칼 궤적·불똥처럼 그림이 매 프레임 바뀌어 겉모습·몸·물체로 못 정한 무리.
+	   옮기기 = 게임 속 장풍 자리가 일정하게 갈 때·몸에 붙어 같이 갈 때·테두리가 등속일 때만 옮김(도트 그대로).
+	   옮기기+섞기 = 그래도 못 옮기는 이펙트는 앞뒤 그림을 반투명으로 겹침(부드럽지만 원래 없던 중간색). 끔 = 예전처럼 제자리. */
+	TextMenuItem ss2FrameGenFxItem[3]
+	{
+		{"옮기기",         attachParams(), [this](){ system().ss2FrameGenFx = 1; ss2fg_set_fx(1); }},
+		{"옮기기 + 섞기",  attachParams(), [this](){ system().ss2FrameGenFx = 2; ss2fg_set_fx(2); }},
+		{"끔",             attachParams(), [this](){ system().ss2FrameGenFx = 0; ss2fg_set_fx(0); }},
+	};
+
+	MultiChoiceMenuItem ss2FrameGenFx
+	{
+		"프레임 생성 — 이펙트", attachParams(),
+		system().ss2FrameGenFx == 1 ? 0 : system().ss2FrameGenFx == 2 ? 1 : 2,
+		ss2FrameGenFxItem
+	};
+
 	/* 버전 정보 — 앱 버전은 metadata/conf.mk 의 android_metadata_version 과 같이 올린다 */
 	TextMenuItem ss2Version
 	{
@@ -389,7 +407,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		[this]()
 		{
 			app().postMessage(6, false,
-				"NGPcustumSP 1.5.85-SS2-1.1.9 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드)\n"
+				"NGPcustumSP 1.5.85-SS2-1.1.10 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트)\n"
 				"해설 엔진 SS2comm v" SS2COMM_VERSION
 				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL");
 		}
@@ -413,6 +431,7 @@ public:
 		item.emplace_back(&ss2FrameGen);
 		item.emplace_back(&ss2FrameGenMult);
 		item.emplace_back(&ss2RunAhead);
+		item.emplace_back(&ss2FrameGenFx);
 		item.emplace_back(&ss2Version);
 		item.emplace_back(&saveFilenameType);
 	}
