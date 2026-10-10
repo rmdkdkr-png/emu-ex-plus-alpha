@@ -400,6 +400,21 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		ss2FrameGenFxItem
 	};
 
+	/* 날아가는 몸 포즈 — 맞고 빙글빙글 날아갈 때 게임은 몸 포즈 두 장을 1/30초마다 번갈아 그려 깜빡이는 듯 보인다.
+	   섞기 = 그 몸만 중간 그림에서 지금 포즈와 다음 포즈를 반투명으로 이어 덜 깜빡이게(잔상). 끔 = 원래대로 포즈가 툭툭 바뀜. */
+	TextMenuItem ss2FrameGenPoseItem[2]
+	{
+		{"섞기", attachParams(), [this](){ system().ss2FrameGenPose = 1; ss2fg_set_pose(1); }},
+		{"끔",   attachParams(), [this](){ system().ss2FrameGenPose = 0; ss2fg_set_pose(0); }},
+	};
+
+	MultiChoiceMenuItem ss2FrameGenPose
+	{
+		"프레임 생성 — 날아가는 몸 포즈", attachParams(),
+		system().ss2FrameGenPose ? 0 : 1,
+		ss2FrameGenPoseItem
+	};
+
 	/* 버전 정보 — 앱 버전은 metadata/conf.mk 의 android_metadata_version 과 같이 올린다 */
 	TextMenuItem ss2Version
 	{
@@ -407,7 +422,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		[this]()
 		{
 			app().postMessage(6, false,
-				"NGPcustumSP 1.5.85-SS2-1.1.12 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트 + 몸 박자)\n"
+				"NGPcustumSP 1.5.85-SS2-1.1.13 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트 + 몸 박자 + 포즈 섞기)\n"
 				"해설 엔진 SS2comm v" SS2COMM_VERSION
 				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL");
 		}
@@ -432,6 +447,7 @@ public:
 		item.emplace_back(&ss2FrameGenMult);
 		item.emplace_back(&ss2RunAhead);
 		item.emplace_back(&ss2FrameGenFx);
+		item.emplace_back(&ss2FrameGenPose);
 		item.emplace_back(&ss2Version);
 		item.emplace_back(&saveFilenameType);
 	}

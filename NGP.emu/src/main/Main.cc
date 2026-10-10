@@ -189,6 +189,7 @@ void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	   코어판 libretro.c 와 같은 줄. 이 앱은 사무쇼2·SvC 만 여니 SvC 가 아니면 사무쇼2 — SvC 는 안 물린다. */
 	ss2fg_set_ram(svcsp_rom_ok() ? nullptr : MDFN_IEN_NGP::CPUExRAM);
 	ss2fg_set_fx(ss2FrameGenFx);                /* 이펙트·장풍 규칙(옮기기/섞기/끔) — 메뉴에서 바꾸면 거기서도 넘긴다 */
+	ss2fg_set_pose(ss2FrameGenPose);            /* 날아가는 몸 포즈 섞기(섞기/끔) */
 	svcsp_set_engine(1);                        /* SVC 롬이면 모던 조작 — 끄기는 「원버튼 필살기」 옵션 공용 */
 	ss2comm_overlay_spmode(svcsp_rom_ok());     /* 오버레이 SP 페이지가 svcsp 표를 쓴다 */
 	MDFN_IEN_NGP::SetPixelFormat(toMDFNSurface(mSurfacePix).format);
