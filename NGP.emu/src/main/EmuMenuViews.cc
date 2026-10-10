@@ -372,7 +372,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		[this]()
 		{
 			app().postMessage(6, false,
-				"NGPcustumSP 1.5.85-SS2-1.1.7 (프레임 생성 120Hz · 4배 + 몸 위치)\n"
+				"NGPcustumSP 1.5.85-SS2-1.1.8 (프레임 생성 120Hz · 4배 + 몸·물체 위치)\n"
 				"해설 엔진 SS2comm v" SS2COMM_VERSION
 				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL");
 		}
