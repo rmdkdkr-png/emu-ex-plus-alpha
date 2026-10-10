@@ -347,11 +347,16 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	ss2SyncSurface();
 	ss2FgNextOk = false;                 /* 새 실제 프레임 — 지난 4배 그림은 버린다 */
 	ss2FgCommitPending = false;
+	ss2FrameNo++;
 	EmuEx::runFrame(*this, mdfnGameInfo, taskCtx, video, mSurfacePix, audio, maxAudioFrames);
 	if(ss2FgCommitPending)
-	{	/* 4배: Emulate 가 끝난 뒤 N+1·N+2 를 미리 돌려 τ=N 을 표면에 덮어 그리고(못 하면 실제 N 그대로) 올린다 */
+	{	/* 4배·런어헤드: Emulate 가 끝난 뒤 숨은 프레임을 돌려 보여 줄 그림을 표면에 만들고(못 하면 실제 N 그대로) 올린다 */
 		ss2FgCommitPending = false;
-		ss2Predict4();
+		int ra = ss2RaFrames();
+		if(ss2FourXActive())
+			ss2Predict4(ra);
+		else if(ra)
+			ss2RaPlain(ra);
 		if(video)
 			video->startFrameWithFormat(taskCtx, ss2CommitPix());
 	}
@@ -464,41 +469,94 @@ bool NgpSystem::ss2PredictFrame()
 /* 4배 — 실제 N 을 막 돌린 직후(커밋 전). N+1·N+2 를 미리 돌려 스프라이트·스크롤 각각 «다음에 바뀌는 프레임 K» 와
    «지난번 바뀐 때 L(K 보다 최대 2 프레임 앞)» 을 찾고, L~K 를 고르게 나눠 τ=N 은 표면에, τ=N+½ 은 ss2FgNext 에.
    위치만 옮긴다 — 그림(타일·포즈)은 실제 N 의 것. 코어판 fg_predict4 와 같은 계산. */
-bool NgpSystem::ss2Predict4()
+/* ── 숨은 프레임 돌리기 (4배·런어헤드 공용) — 코어판 fg_snap_save/fg_hidden/fg_snap_load 와 같은 절차 ── */
+static uint8_t ss2SnapExtras[8];
+static int ss2SnapIline;
+
+bool NgpSystem::ss2SnapSave()
 {
 	using namespace Mednafen;
-	const ss2fg_frame *f0 = ss2fg_hist(0), *fp = ss2fg_hist(1);
-	ss2FgNextOk = false;
-	if(!f0)
-		return false;
-	ss2FgRealN++;
-	int mp0 = fp ? ss2fg_motion(fp, f0) : 0;      /* N-1→N 에 바뀐 것 — 박자 기억 */
-	if(mp0 & 1) ss2FgLastSpr = ss2FgRealN;
-	if(mp0 & 2) ss2FgLastScr = ss2FgRealN;
-
-	uint8_t extras[8];
-	int ilineSave = ngp_z80_iline_get();
 	if(!ss2FgStateStream)
 		ss2FgStateStream = new MemoryStream(65536, -1);
 	ngp_fg_state_skip = 3;
 	ss2FgStateStream->setSize(0);
 	ss2FgStateStream->seek(0, SEEK_SET);
 	MDFNSS_SaveSM(ss2FgStateStream);
-	ngp_mem_fg_extras(extras, 0);
+	ngp_mem_fg_extras(ss2SnapExtras, 0);
+	ss2SnapIline = ngp_z80_iline_get();
+	return true;
+}
 
-	EmulateSpecStruct espec{};
-	espec.sys = this;
-	espec.video = nullptr;
-	espec.skip = true;
+void NgpSystem::ss2SnapLoad(int pops)
+{
+	using namespace Mednafen;
+	ss2FgStateStream->seek(0, SEEK_SET);
+	MDFNSS_LoadSM(ss2FgStateStream);
+	ngp_fg_state_skip = 0;
+	ngp_mem_fg_extras(ss2SnapExtras, 1);
+	ngp_z80_iline_set(ss2SnapIline);
+	while(pops-- > 0)
+		ss2fg_capture_pop();
+}
+
+/* 입력은 램에 든 마지막 값 그대로(붙잡고 있다고 가정). keep(1..n) 번째 프레임만 그려 표면에 남기고 나머지는 캡처만 */
+bool NgpSystem::ss2Hidden(int n, int keep)
+{
+	using namespace Mednafen;
 	auto mSurface = toMDFNSurface(mSurfacePix);
-	espec.surface = &mSurface;
 	ngp_fg_mute = 1; ngp_fg_predict = 1;
-	mdfnGameInfo.Emulate(&espec);                 /* 입력은 램에 든 마지막 값 그대로(붙잡고 있다고 가정) */
-	mdfnGameInfo.Emulate(&espec);
+	for(int k = 1; k <= n; k++)
+	{
+		EmulateSpecStruct espec{};
+		espec.sys = this;
+		espec.video = nullptr;
+		espec.skip = (k != keep);
+		espec.surface = &mSurface;
+		mdfnGameInfo.Emulate(&espec);
+	}
 	ngp_fg_mute = 0; ngp_fg_predict = 0;
+	return true;
+}
 
-	const ss2fg_frame *f2 = ss2fg_hist(0), *f1 = ss2fg_hist(1);
-	f0 = ss2fg_hist(2);
+int NgpSystem::ss2RaFrames() const
+{
+	if(ss2RunAhead == 0 || svcsp_rom_ok())                        /* 사무쇼2 롬에서만(SvC 는 반응 프레임을 안 쟀다) */
+		return 0;
+	if(ss2FrameGen && ss2FrameGenMult == 2 && ss2SlotsComing())   /* 2배 프레임 생성 중엔 끔(코어판과 같음) */
+		return 0;
+	return ss2RunAhead > 2 ? 2 : ss2RunAhead;
+}
+
+/* 프레임 생성 없이(60Hz 화면 등) 런어헤드만 — 표면에 N+ra 그림이 남는다 */
+bool NgpSystem::ss2RaPlain(int ra)
+{
+	ss2FgNextOk = false;
+	if(!ss2fg_cur() || !ss2SnapSave())
+		return false;
+	ss2Hidden(ra, ra);
+	ss2SnapLoad(ra);
+	return true;
+}
+
+bool NgpSystem::ss2Predict4(int ra)
+{
+	using namespace Mednafen;
+	ss2FgNextOk = false;
+	if(!ss2fg_hist(0) || !ss2SnapSave())
+		return false;
+	ss2FgRealN++;
+	/* 보여 줄 프레임 D = N+ra. 숨겨 돌린 뒤 링: [0]=D+2 [1]=D+1 [2]=D [3]=D-1 (ra=0 이면 D-1 은 실제 N-1).
+	   keep=ra 라 표면에는 D 의 그림이 남는다(ra=0 이면 실제 N 그대로) */
+	ss2Hidden(ra + 2, ra);
+	const ss2fg_frame *f2 = ss2fg_hist(0), *f1 = ss2fg_hist(1), *f0 = ss2fg_hist(2), *fp = ss2fg_hist(3);
+	int mp0 = (fp && f0) ? ss2fg_motion(fp, f0) : 0;   /* D-1→D 에 바뀐 것 — 박자 기억 */
+	if(mp0 & 1) ss2FgLastSpr = ss2FgRealN;
+	if(mp0 & 2) ss2FgLastScr = ss2FgRealN;
+	if(!f0 || !f1 || !f2)
+	{
+		ss2SnapLoad(ra + 2);
+		return false;
+	}
 	int m01 = ss2fg_motion(f0, f1), m12 = ss2fg_motion(f1, f2);
 	auto tpos = [](int K, int L, int h){ return (!K || K <= L) ? 0 : (256 * (h - 2 * L)) / (2 * (K - L)); };
 	int Ks = (m01 & 1) ? 1 : (m12 & 1) ? 2 : 0, rel = (int)ss2FgLastSpr - (int)ss2FgRealN;
@@ -525,14 +583,7 @@ bool NgpSystem::ss2Predict4()
 	if(ts0 || tb0)
 		ss2fg_render2(f0, tos, ts0, tob, tb0, mSurfacePix.data(), pitchPx, bpp, cmap);
 	ss2FgNextOk = true;
-
-	ss2FgStateStream->seek(0, SEEK_SET);
-	MDFNSS_LoadSM(ss2FgStateStream);
-	ngp_fg_state_skip = 0;
-	ngp_mem_fg_extras(extras, 1);
-	ngp_z80_iline_set(ilineSave);
-	ss2fg_capture_pop();                 /* 예측 두 장을 무른다 */
-	ss2fg_capture_pop();
+	ss2SnapLoad(ra + 2);                 /* 숨은 프레임 캡처를 무른다 */
 	return true;
 }
 
@@ -541,7 +592,7 @@ bool NgpSystem::interFrame(EmuSystemTaskContext taskCtx, EmuVideo &video)
 {
 	if(!ss2FrameGen || !hasContent() || !ss2fg_cur() || ss2comm_overlay_active())
 		return false;
-	ss2FgLastInter = ss2FgRealN;         /* 빈 슬롯이 오고 있다 — 4배 판정용 */
+	ss2FgLastInter = ss2FrameNo;         /* 빈 슬롯이 오고 있다 — 4배·런어헤드 판정용 */
 	if(ss2FgNextOk)
 	{	/* 4배: 실제 호출 때 미리 만들어 둔 반 프레임 뒤 그림 */
 		auto bpp = mSurfacePix.format().bytesPerPixel();
@@ -569,8 +620,8 @@ extern "C++" namespace Mednafen
 void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 {
 	auto &sys = static_cast<NgpSystem&>(*espec->sys);
-	if(sys.ss2FourXActive() && sys.hasContent() && ss2fg_cur() && !ss2comm_overlay_active())
-	{	/* 4배: 여기는 Emulate 안이다 — 커밋을 runFrame 으로 미루고 거기서 N+1·N+2 예측 뒤 올린다 */
+	if((sys.ss2FourXActive() || sys.ss2RaFrames() > 0) && sys.hasContent() && ss2fg_cur() && !ss2comm_overlay_active())
+	{	/* 4배·런어헤드: 여기는 Emulate 안이다 — 커밋을 runFrame 으로 미루고 거기서 숨은 프레임을 돌린 뒤 올린다 */
 		sys.ss2FgCommitPending = true;
 		return;
 	}

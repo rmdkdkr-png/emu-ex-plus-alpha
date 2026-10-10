@@ -365,6 +365,23 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		ss2FrameGenMultItem
 	};
 
+	/* 런어헤드 — 사무쇼2는 버튼을 누르고 2~3프레임 뒤에 화면이 바뀐다. 그만큼 미리 돌려 둔 그림을 보여 줘 반응을 앞당긴다.
+	   2 = 33ms(입력을 바꾸는 순간 아주 가끔 이전 동작이 한 장 더 보임), 1 = 17ms(거의 정확). 소리는 그림보다 그만큼 늦다.
+	   사무쇼2 롬에서만, 2배 프레임 생성 중엔 꺼진다. */
+	TextMenuItem ss2RunAheadItem[3]
+	{
+		{"2 프레임 (33ms)", attachParams(), [this](){ system().ss2RunAhead = 2; }},
+		{"1 프레임 (17ms)", attachParams(), [this](){ system().ss2RunAhead = 1; }},
+		{"끔",              attachParams(), [this](){ system().ss2RunAhead = 0; }},
+	};
+
+	MultiChoiceMenuItem ss2RunAhead
+	{
+		"런어헤드 (입력 지연 줄이기)", attachParams(),
+		system().ss2RunAhead == 2 ? 0 : system().ss2RunAhead == 1 ? 1 : 2,
+		ss2RunAheadItem
+	};
+
 	/* 버전 정보 — 앱 버전은 metadata/conf.mk 의 android_metadata_version 과 같이 올린다 */
 	TextMenuItem ss2Version
 	{
@@ -372,7 +389,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		[this]()
 		{
 			app().postMessage(6, false,
-				"NGPcustumSP 1.5.85-SS2-1.1.8 (프레임 생성 120Hz · 4배 + 몸·물체 위치)\n"
+				"NGPcustumSP 1.5.85-SS2-1.1.9 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드)\n"
 				"해설 엔진 SS2comm v" SS2COMM_VERSION
 				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL");
 		}
@@ -395,6 +412,7 @@ public:
 		item.emplace_back(&ss2commVibrate);
 		item.emplace_back(&ss2FrameGen);
 		item.emplace_back(&ss2FrameGenMult);
+		item.emplace_back(&ss2RunAhead);
 		item.emplace_back(&ss2Version);
 		item.emplace_back(&saveFilenameType);
 	}

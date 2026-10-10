@@ -84,7 +84,7 @@ enum NgpConfigKey
 	CFGKEY_SS2COMM_ENABLED = 274, CFGKEY_SS2COMM_SPK = 275, CFGKEY_SS2COMM_DRAW = 276,
 	CFGKEY_SS2COMM_VIBRATE = 277, CFGKEY_SS2COMM_REF = 278, CFGKEY_SS2COMM_SIDES = 279,
 	CFGKEY_SS2COMM_SCENECAP = 280, CFGKEY_SS2COMM_SIDEBG = 281,
-	CFGKEY_SS2_FRAMEGEN = 282, CFGKEY_SS2_FRAMEGEN_MULT = 283,
+	CFGKEY_SS2_FRAMEGEN = 282, CFGKEY_SS2_FRAMEGEN_MULT = 283, CFGKEY_SS2_RUNAHEAD = 284,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -175,12 +175,21 @@ public:
 	/* 4배 — 코어판 libretro.c 의 fg_predict4 와 같은 절차. 실제 N 을 돌린 직후 N+1·N+2 를 미리 돌려
 	   τ=N 그림은 표면에 덮어 그리고 τ=N+½ 은 ss2FgNext 에 보관했다가 빈 vsync 슬롯에 올린다.
 	   커밋은 Emulate 가 끝난 뒤로 미룬다(ss2FgCommitPending). 빈 슬롯이 실제로 오는 동안만(120Hz) 쓴다. */
-	bool ss2Predict4();
-	bool ss2FourXActive() const { return ss2FrameGen && ss2FrameGenMult == 4 && ss2FgRealN - ss2FgLastInter <= 2; }
+	bool ss2Predict4(int ra);
+	/* 런어헤드 — 사무쇼2는 입력이 2~3프레임 뒤에 화면에 나오므로, 실제 N 뒤 N+1·N+2 를 숨겨 돌리고 N+2 의 그림을
+	   보여 준다(코어판 ra_frames/fg_hidden 과 같은 절차). 4배와 같이 돌 때는 보여 주는 시간줄을 앞당긴다. */
+	uint8_t ss2RunAhead{2};             /* 2·1·0 */
+	int ss2RaFrames() const;            /* 지금 쓸 런어헤드 프레임 수(0 = 안 씀) */
+	bool ss2RaPlain(int ra);            /* 프레임 생성 없이 런어헤드만 — 표면에 N+ra 그림 */
+	bool ss2Hidden(int n, int keep);    /* 입력을 붙잡은 채 n 프레임 숨겨 돌린다, keep 번째 그림은 표면에 남긴다 */
+	bool ss2SnapSave();
+	void ss2SnapLoad(int pops);
+	bool ss2SlotsComing() const { return ss2FrameNo - ss2FgLastInter <= 2; }   /* 빈 vsync 슬롯이 오고 있다(120Hz) */
+	bool ss2FourXActive() const { return ss2FrameGen && ss2FrameGenMult == 4 && ss2SlotsComing(); }
 	bool ss2FgCommitPending{};
 	bool ss2FgNextOk{};
 	std::vector<uint8_t> ss2FgNext;
-	uint32_t ss2FgRealN{}, ss2FgLastSpr{}, ss2FgLastScr{}, ss2FgLastInter{};
+	uint32_t ss2FrameNo{}, ss2FgRealN{}, ss2FgLastSpr{}, ss2FgLastScr{}, ss2FgLastInter{};
 	bool ss2BandOn() const { return ss2commEnabled || ss2commRef; }   /* 어느 쪽이든 켜면 띠가 선다 */
 	bool ss2SidesOn() const { return ss2commSides; }   /* 기둥은 챗/심판과 독립 — 꺼도 대진 추적은 돈다 */
 	void ss2SyncSurface();              /* 게임이 그려질 자리를 띠 유무에 맞춘다 */
