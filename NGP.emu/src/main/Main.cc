@@ -185,6 +185,9 @@ void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	   코어판(libretro)에도 같은 줄이 있다. 이 줄이 없으면 띠에 얼굴 자리가 빈다. */
 	ss2comm_set_rom(MDFN_IEN_NGP::ngpc_rom.orig_data, MDFN_IEN_NGP::ngpc_rom.length);
 	svcsp_set_rom(MDFN_IEN_NGP::ngpc_rom.orig_data, MDFN_IEN_NGP::ngpc_rom.length);
+	/* 프레임 생성: 사무쇼2 롬이면 RAM 의 몸 위치(P1·P2)를 캡처마다 적어, 포즈가 통째로 바뀌는 몸도 궤적대로 옮긴다.
+	   코어판 libretro.c 와 같은 줄. 다른 롬은 안 물린다. */
+	ss2fg_set_ram(ss2comm_rom_is_ss2() ? MDFN_IEN_NGP::CPUExRAM : nullptr);
 	svcsp_set_engine(1);                        /* SVC 롬이면 모던 조작 — 끄기는 「원버튼 필살기」 옵션 공용 */
 	ss2comm_overlay_spmode(svcsp_rom_ok());     /* 오버레이 SP 페이지가 svcsp 표를 쓴다 */
 	MDFN_IEN_NGP::SetPixelFormat(toMDFNSurface(mSurfacePix).format);
