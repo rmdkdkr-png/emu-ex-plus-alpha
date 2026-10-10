@@ -18,6 +18,7 @@ module;
 #include <format>
 #include <vector>
 #include <cstring>
+#include <algorithm>
 #include <ss2sp/ss2sp.h>
 #include <svcsp/svcsp.h>
 #include <ss2comm/ss2comm.h>
@@ -341,7 +342,16 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	   4 = 화면 밖 위 띠 (코어판과 같은 모드). 해설을 켜면 늘 코어가 직접 그린다. */
 	ss2comm_draw_enable(ss2BandOn() ? 4 : 0);
 	ss2SyncSurface();
+	ss2FgNextOk = false;                 /* 새 실제 프레임 — 지난 4배 그림은 버린다 */
+	ss2FgCommitPending = false;
 	EmuEx::runFrame(*this, mdfnGameInfo, taskCtx, video, mSurfacePix, audio, maxAudioFrames);
+	if(ss2FgCommitPending)
+	{	/* 4배: Emulate 가 끝난 뒤 N+1·N+2 를 미리 돌려 τ=N 을 표면에 덮어 그리고(못 하면 실제 N 그대로) 올린다 */
+		ss2FgCommitPending = false;
+		ss2Predict4();
+		if(video)
+			video->startFrameWithFormat(taskCtx, ss2CommitPix());
+	}
 	/* ── SS2 캐릭터 해설 ────────────────────────────────────────
 	   프레임을 돌린 뒤 램을 읽어 이벤트를 잡는다(브라우저판·코어판과 같은 엔진).
 	   대사는 코어가 띠에 직접 그리므로 여기서는 큐를 한 칸 미는 것과 진동만 한다. */
@@ -448,13 +458,99 @@ bool NgpSystem::ss2PredictFrame()
 	return ok != 0;
 }
 
+/* 4배 — 실제 N 을 막 돌린 직후(커밋 전). N+1·N+2 를 미리 돌려 스프라이트·스크롤 각각 «다음에 바뀌는 프레임 K» 와
+   «지난번 바뀐 때 L(K 보다 최대 2 프레임 앞)» 을 찾고, L~K 를 고르게 나눠 τ=N 은 표면에, τ=N+½ 은 ss2FgNext 에.
+   위치만 옮긴다 — 그림(타일·포즈)은 실제 N 의 것. 코어판 fg_predict4 와 같은 계산. */
+bool NgpSystem::ss2Predict4()
+{
+	using namespace Mednafen;
+	const ss2fg_frame *f0 = ss2fg_hist(0), *fp = ss2fg_hist(1);
+	ss2FgNextOk = false;
+	if(!f0)
+		return false;
+	ss2FgRealN++;
+	int mp0 = fp ? ss2fg_motion(fp, f0) : 0;      /* N-1→N 에 바뀐 것 — 박자 기억 */
+	if(mp0 & 1) ss2FgLastSpr = ss2FgRealN;
+	if(mp0 & 2) ss2FgLastScr = ss2FgRealN;
+
+	uint8_t extras[8];
+	int ilineSave = ngp_z80_iline_get();
+	if(!ss2FgStateStream)
+		ss2FgStateStream = new MemoryStream(65536, -1);
+	ngp_fg_state_skip = 3;
+	ss2FgStateStream->setSize(0);
+	ss2FgStateStream->seek(0, SEEK_SET);
+	MDFNSS_SaveSM(ss2FgStateStream);
+	ngp_mem_fg_extras(extras, 0);
+
+	EmulateSpecStruct espec{};
+	espec.sys = this;
+	espec.video = nullptr;
+	espec.skip = true;
+	auto mSurface = toMDFNSurface(mSurfacePix);
+	espec.surface = &mSurface;
+	ngp_fg_mute = 1; ngp_fg_predict = 1;
+	mdfnGameInfo.Emulate(&espec);                 /* 입력은 램에 든 마지막 값 그대로(붙잡고 있다고 가정) */
+	mdfnGameInfo.Emulate(&espec);
+	ngp_fg_mute = 0; ngp_fg_predict = 0;
+
+	const ss2fg_frame *f2 = ss2fg_hist(0), *f1 = ss2fg_hist(1);
+	f0 = ss2fg_hist(2);
+	int m01 = ss2fg_motion(f0, f1), m12 = ss2fg_motion(f1, f2);
+	auto tpos = [](int K, int L, int h){ return (!K || K <= L) ? 0 : (256 * (h - 2 * L)) / (2 * (K - L)); };
+	int Ks = (m01 & 1) ? 1 : (m12 & 1) ? 2 : 0, rel = (int)ss2FgLastSpr - (int)ss2FgRealN;
+	int Ls = Ks ? std::max(rel, Ks - 2) : 0;
+	int Kb = (m01 & 2) ? 1 : (m12 & 2) ? 2 : 0;
+	rel = (int)ss2FgLastScr - (int)ss2FgRealN;
+	int Lb = Kb ? std::max(rel, Kb - 2) : 0;
+	const ss2fg_frame *tos = Ks == 1 ? f1 : Ks == 2 ? f2 : nullptr;
+	const ss2fg_frame *tob = Kb == 1 ? f1 : Kb == 2 ? f2 : nullptr;
+	int ts0 = tpos(Ks, Ls, 0), ts1 = tpos(Ks, Ls, 1), tb0 = tpos(Kb, Lb, 0), tb1 = tpos(Kb, Lb, 1);
+
+	auto bpp = mSurfacePix.format().bytesPerPixel();
+	auto pitchPx = mSurfacePix.pitchPx();
+	size_t pitchB = (size_t)pitchPx * bpp;
+	if(ss2FgNext.size() < pitchB * ss2GameH)
+		ss2FgNext.resize(pitchB * ss2GameH);
+	auto cmap = MDFN_IEN_NGP::NGPGfx->colorMap();
+	/* τ=N+½ — 먼저 실제 N 을 복사해 두고(못 만들면 그대로), 그 위에 그린다 */
+	for(int y = 0; y < ss2GameH; y++)
+		memcpy(ss2FgNext.data() + y * pitchB, mSurfacePix.data() + y * pitchB, ss2GameW * bpp);
+	if(ts1 || tb1)
+		ss2fg_render2(f0, tos, ts1, tob, tb1, ss2FgNext.data(), pitchPx, bpp, cmap);
+	/* τ=N — 둘 다 0 이면 실제 N 그대로(표면에 이미 있다). 합성 실패면 render2 가 아무것도 안 쓴다 */
+	if(ts0 || tb0)
+		ss2fg_render2(f0, tos, ts0, tob, tb0, mSurfacePix.data(), pitchPx, bpp, cmap);
+	ss2FgNextOk = true;
+
+	ss2FgStateStream->seek(0, SEEK_SET);
+	MDFNSS_LoadSM(ss2FgStateStream);
+	ngp_fg_state_skip = 0;
+	ngp_mem_fg_extras(extras, 1);
+	ngp_z80_iline_set(ilineSave);
+	ss2fg_capture_pop();                 /* 예측 두 장을 무른다 */
+	ss2fg_capture_pop();
+	return true;
+}
+
 /* 빈 vsync 슬롯 — EmuSystemTask::advanceFrames 가 advanced==0 일 때 부른다 */
 bool NgpSystem::interFrame(EmuSystemTaskContext taskCtx, EmuVideo &video)
 {
 	if(!ss2FrameGen || !hasContent() || !ss2fg_cur() || ss2comm_overlay_active())
 		return false;
-	/* 합성이 안 되면(표시 중 VRAM 쓰기·흑백 모드) 실제 프레임을 그대로 한 번 더 올린다 */
-	ss2PredictFrame();
+	ss2FgLastInter = ss2FgRealN;         /* 빈 슬롯이 오고 있다 — 4배 판정용 */
+	if(ss2FgNextOk)
+	{	/* 4배: 실제 호출 때 미리 만들어 둔 반 프레임 뒤 그림 */
+		auto bpp = mSurfacePix.format().bytesPerPixel();
+		auto pitchB = mSurfacePix.pitchPx() * bpp;
+		for(int y = 0; y < ss2GameH; y++)
+			memcpy(mSurfacePix.data() + y * pitchB, ss2FgNext.data() + y * pitchB, ss2GameW * bpp);
+		ss2FgNextOk = false;
+	}
+	else
+	{	/* 2배(또는 4배가 못 만든 프레임): 합성이 안 되면(표시 중 VRAM 쓰기·흑백 모드) 실제 프레임을 그대로 한 번 더 올린다 */
+		ss2PredictFrame();
+	}
 	ss2comm_draw_hold(1);                /* 띠·토스트는 다시 그리되 수명은 실제 프레임에서만 줄인다 */
 	auto pix = ss2CommitPix();
 	ss2comm_draw_hold(0);
@@ -469,7 +565,13 @@ extern "C++" namespace Mednafen
 
 void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 {
-	espec->video->startFrameWithFormat(espec->taskCtx, static_cast<NgpSystem&>(*espec->sys).ss2CommitPix());
+	auto &sys = static_cast<NgpSystem&>(*espec->sys);
+	if(sys.ss2FourXActive() && sys.hasContent() && ss2fg_cur() && !ss2comm_overlay_active())
+	{	/* 4배: 여기는 Emulate 안이다 — 커밋을 runFrame 으로 미루고 거기서 N+1·N+2 예측 뒤 올린다 */
+		sys.ss2FgCommitPending = true;
+		return;
+	}
+	espec->video->startFrameWithFormat(espec->taskCtx, sys.ss2CommitPix());
 }
 
 }

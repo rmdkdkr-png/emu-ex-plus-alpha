@@ -350,6 +350,21 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		}
 	};
 
+	/* 프레임 생성 배수 — 4배: 사무쇼2는 캐릭터·배경을 2프레임에 한 번(초당 30번) 움직이므로 다음에 바뀌는
+	   프레임까지 미리 돌려(에뮬 약 1.5배) 120Hz 네 장에 고르게 나눈다. 2배: 실제 프레임마다 반 프레임 하나. */
+	TextMenuItem ss2FrameGenMultItem[2]
+	{
+		{"4배 (게임 박자 맞춤)", attachParams(), [this](){ system().ss2FrameGenMult = 4; }},
+		{"2배",                  attachParams(), [this](){ system().ss2FrameGenMult = 2; }},
+	};
+
+	MultiChoiceMenuItem ss2FrameGenMult
+	{
+		"프레임 생성 배수", attachParams(),
+		system().ss2FrameGenMult == 2 ? 1 : 0,
+		ss2FrameGenMultItem
+	};
+
 	/* 버전 정보 — 앱 버전은 metadata/conf.mk 의 android_metadata_version 과 같이 올린다 */
 	TextMenuItem ss2Version
 	{
@@ -357,7 +372,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		[this]()
 		{
 			app().postMessage(6, false,
-				"NGPcustumSP 1.5.85-SS2-1.1.5 (프레임 생성 120Hz · 겉모습 짝짓기)\n"
+				"NGPcustumSP 1.5.85-SS2-1.1.6 (프레임 생성 120Hz · 4배 박자 맞춤)\n"
 				"해설 엔진 SS2comm v" SS2COMM_VERSION
 				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL");
 		}
@@ -379,6 +394,7 @@ public:
 		item.emplace_back(&ss2commSceneCap);
 		item.emplace_back(&ss2commVibrate);
 		item.emplace_back(&ss2FrameGen);
+		item.emplace_back(&ss2FrameGenMult);
 		item.emplace_back(&ss2Version);
 		item.emplace_back(&saveFilenameType);
 	}

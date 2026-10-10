@@ -84,7 +84,7 @@ enum NgpConfigKey
 	CFGKEY_SS2COMM_ENABLED = 274, CFGKEY_SS2COMM_SPK = 275, CFGKEY_SS2COMM_DRAW = 276,
 	CFGKEY_SS2COMM_VIBRATE = 277, CFGKEY_SS2COMM_REF = 278, CFGKEY_SS2COMM_SIDES = 279,
 	CFGKEY_SS2COMM_SCENECAP = 280, CFGKEY_SS2COMM_SIDEBG = 281,
-	CFGKEY_SS2_FRAMEGEN = 282,
+	CFGKEY_SS2_FRAMEGEN = 282, CFGKEY_SS2_FRAMEGEN_MULT = 283,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -169,8 +169,18 @@ public:
 	   그 슬롯에서 상태를 저장한 채 다음 프레임을 미리 돌려(소리 뮤트) 현재↔다음 중간 자리에
 	   현재 프레임의 타일을 다시 그려 올린다 — 추가 지연 0. 코어판 ss2fg 와 같은 엔진. */
 	bool ss2FrameGen{true};
+	uint8_t ss2FrameGenMult{4};         /* 4 = 게임 박자 맞춤(N+1·N+2 예측, 사무쇼2는 2프레임에 한 번 움직인다) · 2 = 반 프레임 하나 */
 	bool interFrame(EmuSystemTaskContext, EmuVideo &);
 	bool ss2PredictFrame();
+	/* 4배 — 코어판 libretro.c 의 fg_predict4 와 같은 절차. 실제 N 을 돌린 직후 N+1·N+2 를 미리 돌려
+	   τ=N 그림은 표면에 덮어 그리고 τ=N+½ 은 ss2FgNext 에 보관했다가 빈 vsync 슬롯에 올린다.
+	   커밋은 Emulate 가 끝난 뒤로 미룬다(ss2FgCommitPending). 빈 슬롯이 실제로 오는 동안만(120Hz) 쓴다. */
+	bool ss2Predict4();
+	bool ss2FourXActive() const { return ss2FrameGen && ss2FrameGenMult == 4 && ss2FgRealN - ss2FgLastInter <= 2; }
+	bool ss2FgCommitPending{};
+	bool ss2FgNextOk{};
+	std::vector<uint8_t> ss2FgNext;
+	uint32_t ss2FgRealN{}, ss2FgLastSpr{}, ss2FgLastScr{}, ss2FgLastInter{};
 	bool ss2BandOn() const { return ss2commEnabled || ss2commRef; }   /* 어느 쪽이든 켜면 띠가 선다 */
 	bool ss2SidesOn() const { return ss2commSides; }   /* 기둥은 챗/심판과 독립 — 꺼도 대진 추적은 돈다 */
 	void ss2SyncSurface();              /* 게임이 그려질 자리를 띠 유무에 맞춘다 */
