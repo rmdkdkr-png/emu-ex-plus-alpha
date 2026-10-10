@@ -553,6 +553,13 @@ bool NgpSystem::ss2Predict4(int ra)
 	int mp0 = (fp && f0) ? ss2fg_motion(fp, f0) : 0;   /* D-1→D 에 바뀐 것 — 박자 기억 */
 	if(mp0 & 1) ss2FgLastSpr = ss2FgRealN;
 	if(mp0 & 2) ss2FgLastScr = ss2FgRealN;
+	auto bodyDiffers = [](const ss2fg_frame *a, const ss2fg_frame *b, int p)
+	{
+		if(!a || !b || !a->body_ok || !b->body_ok) return false;
+		if(!(a->ob_act & b->ob_act & (1u << p))) return false;
+		return a->ob_x[p] != b->ob_x[p] || a->ob_y[p] != b->ob_y[p];
+	};
+	for(int p = 0; p < 2; p++) if(bodyDiffers(fp, f0, p)) ss2FgLastBody[p] = ss2FgRealN;
 	if(!f0 || !f1 || !f2)
 	{
 		ss2SnapLoad(ra + 2);
@@ -569,6 +576,37 @@ bool NgpSystem::ss2Predict4(int ra)
 	const ss2fg_frame *tob = Kb == 1 ? f1 : Kb == 2 ? f2 : nullptr;
 	int ts0 = tpos(Ks, Ls, 0), ts1 = tpos(Ks, Ls, 1), tb0 = tpos(Kb, Lb, 0), tb1 = tpos(Kb, Lb, 1);
 
+	/* 몸 따로 박자(코어판 fg_predict4 와 같은 절차) — 감전·불탐으로 날아갈 때 게임은 몸을 4 프레임에 한 번 옮기므로
+	   전체 박자(2 프레임)로는 «4장 미끄러지고 4장 멈춤». 몸마다 지난 바뀜·다음 바뀜을 따로 찾아(필요할 때만 2 프레임 더
+	   미리 돌림) 그 사이로 보간한 자리를 엔진에 넣는다(ss2fg_body_override). */
+	int extra = 0;
+	bool ov[2]{};
+	int ovx0[2]{}, ovy0[2]{}, ovx1[2]{}, ovy1[2]{};
+	const ss2fg_frame *fk[5]{f0, f1, f2, nullptr, nullptr};
+	for(int p = 0; p < 2 && f0->body_ok; p++)
+	{
+		int Kp = 0, lrel = (int)ss2FgLastBody[p] - (int)ss2FgRealN;
+		for(int k = 1; k <= 2 && !Kp; k++) if(bodyDiffers(f0, fk[k], p)) Kp = k;
+		if(!Kp && lrel >= -3 && !extra)
+		{	/* 막 움직이던 몸이 앞 2 프레임 안엔 안 바뀜 — 2 프레임 더 미리 돌려 본다(그동안만 숨은 프레임 6 장) */
+			ss2Hidden(2, 0);
+			extra = 2;
+			fk[4] = ss2fg_hist(0); fk[3] = ss2fg_hist(1);
+		}
+		for(int k = 3; k <= 4 && !Kp; k++) if(fk[k] && bodyDiffers(f0, fk[k], p)) Kp = k;
+		if(!Kp) continue;
+		/* L: 지난 바뀜이 K-4..K-3 이면 느린 박자가 이어지는 중 — 그 간격 그대로. 아니면(쉬다가 움직임) 전체와 같은 K-2 */
+		int Lp = (lrel >= Kp - 4 && lrel <= Kp - 3) ? lrel : std::max(lrel, Kp - 2);
+		if(Lp > 0) continue;                 /* 미끄러짐이 아직 시작 전 — 지금은 제자리 */
+		if(Kp == Ks && Lp == Ls) continue;   /* 전체 박자와 같으면 하던 대로 */
+		int dx = (int8_t)(uint8_t)(fk[Kp]->ob_x[p] - f0->ob_x[p]);
+		int dy = (int8_t)(uint8_t)(fk[Kp]->ob_y[p] - f0->ob_y[p]);
+		if(dx > 24 || dx < -24 || dy > 24 || dy < -24) continue;
+		ov[p] = true;
+		ovx0[p] = dx * tpos(Kp, Lp, 0); ovy0[p] = dy * tpos(Kp, Lp, 0);
+		ovx1[p] = dx * tpos(Kp, Lp, 1); ovy1[p] = dy * tpos(Kp, Lp, 1);
+	}
+
 	auto bpp = mSurfacePix.format().bytesPerPixel();
 	auto pitchPx = mSurfacePix.pitchPx();
 	size_t pitchB = (size_t)pitchPx * bpp;
@@ -578,13 +616,16 @@ bool NgpSystem::ss2Predict4(int ra)
 	/* τ=N+½ — 먼저 실제 N 을 복사해 두고(못 만들면 그대로), 그 위에 그린다 */
 	for(int y = 0; y < ss2GameH; y++)
 		memcpy(ss2FgNext.data() + y * pitchB, mSurfacePix.data() + y * pitchB, ss2GameW * bpp);
-	if(ts1 || tb1)
+	for(int p = 0; p < 2; p++) if(ov[p]) ss2fg_body_override(p, 1, ovx1[p], ovy1[p]);
+	if(ts1 || tb1 || ov[0] || ov[1])
 		ss2fg_render2(f0, tos, ts1, tob, tb1, ss2FgNext.data(), pitchPx, bpp, cmap);
 	/* τ=N — 둘 다 0 이면 실제 N 그대로(표면에 이미 있다). 합성 실패면 render2 가 아무것도 안 쓴다 */
-	if(ts0 || tb0)
+	for(int p = 0; p < 2; p++) if(ov[p]) ss2fg_body_override(p, 1, ovx0[p], ovy0[p]);
+	if(ts0 || tb0 || ov[0] || ov[1])
 		ss2fg_render2(f0, tos, ts0, tob, tb0, mSurfacePix.data(), pitchPx, bpp, cmap);
+	ss2fg_body_override(0, 0, 0, 0); ss2fg_body_override(1, 0, 0, 0);
 	ss2FgNextOk = true;
-	ss2SnapLoad(ra + 2);                 /* 숨은 프레임 캡처를 무른다 */
+	ss2SnapLoad(ra + 2 + extra);         /* 숨은 프레임 캡처를 무른다 */
 	return true;
 }
 

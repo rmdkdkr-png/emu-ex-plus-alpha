@@ -194,6 +194,7 @@ public:
 	bool ss2FgNextOk{};
 	std::vector<uint8_t> ss2FgNext;
 	uint32_t ss2FrameNo{}, ss2FgRealN{}, ss2FgLastSpr{}, ss2FgLastScr{}, ss2FgLastInter{};
+	uint32_t ss2FgLastBody[2]{};        /* 몸 따로 박자 — 몸 0·1 의 자리가 마지막으로 바뀐 실제 프레임 */
 	bool ss2BandOn() const { return ss2commEnabled || ss2commRef; }   /* 어느 쪽이든 켜면 띠가 선다 */
 	bool ss2SidesOn() const { return ss2commSides; }   /* 기둥은 챗/심판과 독립 — 꺼도 대진 추적은 돈다 */
 	void ss2SyncSurface();              /* 게임이 그려질 자리를 띠 유무에 맞춘다 */
