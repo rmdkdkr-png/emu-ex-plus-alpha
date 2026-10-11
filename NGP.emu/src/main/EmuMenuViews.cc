@@ -339,16 +339,21 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 	};
 
 	/* 프레임 생성 — 120Hz 화면에서 빈 vsync 슬롯에 중간 프레임을 넣는다.
-	   프레임 타이밍 옵션의 「화면 주사율 덮어쓰기」를 120Hz 로 두어야 슬롯이 생긴다. */
-	BoolMenuItem ss2FrameGen
+	   프레임 타이밍 옵션의 「화면 주사율 덮어쓰기」를 120Hz 로 두어야 슬롯이 생긴다.
+	   켬: 슬롯이 오면 120 출력, 안 오면(60Hz 화면) 60Hz 사이 그림. 60Hz 사이 그림만: 120 출력 없이 실제 프레임마다 박자에
+	   맞춘 자리만(사무쇼2는 30Hz 로 움직이므로 60Hz 화면에서도 60 으로 — 예측, 지연 없음, 배터리). 끔: 런어헤드만. */
+	TextMenuItem ss2FrameGenItem[3]
 	{
-		"프레임 생성 (120Hz, 주사율 덮어쓰기 120 필요)", attachParams(),
-		system().ss2FrameGen,
-		"끔", "켬",
-		[this](BoolMenuItem &item, View &, Input::Event e)
-		{
-			system().ss2FrameGen = item.flipBoolValue(*this);
-		}
+		{"켬 (120Hz 슬롯이 오면 120, 아니면 60Hz 사이 그림)", attachParams(), [this](){ system().ss2FrameGen = 1; }},
+		{"60Hz 사이 그림만 (120 출력 안 함)",                   attachParams(), [this](){ system().ss2FrameGen = 2; }},
+		{"끔",                                                attachParams(), [this](){ system().ss2FrameGen = 0; }},
+	};
+
+	MultiChoiceMenuItem ss2FrameGen
+	{
+		"프레임 생성 (120Hz 는 주사율 덮어쓰기 120 필요)", attachParams(),
+		system().ss2FrameGen == 1 ? 0 : system().ss2FrameGen == 2 ? 1 : 2,
+		ss2FrameGenItem
 	};
 
 	/* 프레임 생성 배수 — 4배: 사무쇼2는 캐릭터·배경을 2프레임에 한 번(초당 30번) 움직이므로 다음에 바뀌는
@@ -422,7 +427,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		[this]()
 		{
 			app().postMessage(6, false,
-				"NGPcustumSP 1.5.85-SS2-1.1.13 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트 + 몸 박자 + 포즈 섞기)\n"
+				"NGPcustumSP 1.5.85-SS2-1.1.14 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트 + 몸 박자 + 포즈 섞기 + 60Hz 사이 그림)\n"
 				"해설 엔진 SS2comm v" SS2COMM_VERSION
 				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL");
 		}

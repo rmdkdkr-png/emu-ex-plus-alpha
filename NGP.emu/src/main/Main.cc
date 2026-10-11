@@ -357,6 +357,16 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 		int ra = ss2RaFrames();
 		if(ss2FourXActive())
 			ss2Predict4(ra);
+		else if(ss2SixtyPath())
+		{	/* 60Hz 사이 그림(코어 패치 90): 120 출력이 아닐 때 4배의 2프레임 예측을 그대로 돌려 실제 프레임마다
+			   «박자에 맞춘 자리»(τ=D)만 표면에 — 안 바뀌는 프레임에 다음 그림까지의 반 자리를 그려 30→60Hz, 예측이라 지연 없음.
+			   사무쇼2가 아니면(캡처 없음) ss2Predict4 가 false → 런어헤드만 */
+			ss2FgNoNext = true;
+			if(!ss2Predict4(ra) && ra)
+				ss2RaPlain(ra);
+			ss2FgNoNext = false;
+			ss2FgNextOk = false;
+		}
 		else if(ra)
 			ss2RaPlain(ra);
 		if(video)
@@ -524,7 +534,7 @@ int NgpSystem::ss2RaFrames() const
 {
 	if(ss2RunAhead == 0 || svcsp_rom_ok())                        /* 사무쇼2 롬에서만(SvC 는 반응 프레임을 안 쟀다) */
 		return 0;
-	if(ss2FrameGen && ss2FrameGenMult == 2 && ss2SlotsComing())   /* 2배 프레임 생성 중엔 끔(코어판과 같음) */
+	if(ss2FrameGen == 1 && ss2FrameGenMult == 2 && ss2SlotsComing())   /* 2배 프레임 생성 중엔 끔(코어판과 같음) */
 		return 0;
 	return ss2RunAhead > 2 ? 2 : ss2RunAhead;
 }
@@ -614,18 +624,21 @@ bool NgpSystem::ss2Predict4(int ra)
 	if(ss2FgNext.size() < pitchB * ss2GameH)
 		ss2FgNext.resize(pitchB * ss2GameH);
 	auto cmap = MDFN_IEN_NGP::NGPGfx->colorMap();
-	/* τ=N+½ — 먼저 실제 N 을 복사해 두고(못 만들면 그대로), 그 위에 그린다 */
-	for(int y = 0; y < ss2GameH; y++)
-		memcpy(ss2FgNext.data() + y * pitchB, mSurfacePix.data() + y * pitchB, ss2GameW * bpp);
-	for(int p = 0; p < 2; p++) if(ov[p]) ss2fg_body_override(p, 1, ovx1[p], ovy1[p]);
-	if(ts1 || tb1 || ov[0] || ov[1])
-		ss2fg_render2(f0, tos, ts1, tob, tb1, ss2FgNext.data(), pitchPx, bpp, cmap);
+	/* τ=N+½ — 먼저 실제 N 을 복사해 두고(못 만들면 그대로), 그 위에 그린다. 60Hz 사이 그림(ss2FgNoNext)은 건너뛴다 */
+	if(!ss2FgNoNext)
+	{
+		for(int y = 0; y < ss2GameH; y++)
+			memcpy(ss2FgNext.data() + y * pitchB, mSurfacePix.data() + y * pitchB, ss2GameW * bpp);
+		for(int p = 0; p < 2; p++) if(ov[p]) ss2fg_body_override(p, 1, ovx1[p], ovy1[p]);
+		if(ts1 || tb1 || ov[0] || ov[1])
+			ss2fg_render2(f0, tos, ts1, tob, tb1, ss2FgNext.data(), pitchPx, bpp, cmap);
+	}
 	/* τ=N — 둘 다 0 이면 실제 N 그대로(표면에 이미 있다). 합성 실패면 render2 가 아무것도 안 쓴다 */
 	for(int p = 0; p < 2; p++) if(ov[p]) ss2fg_body_override(p, 1, ovx0[p], ovy0[p]);
 	if(ts0 || tb0 || ov[0] || ov[1])
 		ss2fg_render2(f0, tos, ts0, tob, tb0, mSurfacePix.data(), pitchPx, bpp, cmap);
 	ss2fg_body_override(0, 0, 0, 0); ss2fg_body_override(1, 0, 0, 0);
-	ss2FgNextOk = true;
+	ss2FgNextOk = !ss2FgNoNext;
 	ss2SnapLoad(ra + 2 + extra);         /* 숨은 프레임 캡처를 무른다 */
 	return true;
 }
@@ -633,8 +646,8 @@ bool NgpSystem::ss2Predict4(int ra)
 /* 빈 vsync 슬롯 — EmuSystemTask::advanceFrames 가 advanced==0 일 때 부른다 */
 bool NgpSystem::interFrame(EmuSystemTaskContext taskCtx, EmuVideo &video)
 {
-	if(!ss2FrameGen || !hasContent() || !ss2fg_cur() || ss2comm_overlay_active())
-		return false;
+	if(ss2FrameGen != 1 || !hasContent() || !ss2fg_cur() || ss2comm_overlay_active())
+		return false;                    /* 「60Hz 사이 그림만」은 빈 슬롯을 채우지 않는다(120 출력 안 함) */
 	ss2FgLastInter = ss2FrameNo;         /* 빈 슬롯이 오고 있다 — 4배·런어헤드 판정용 */
 	if(ss2FgNextOk)
 	{	/* 4배: 실제 호출 때 미리 만들어 둔 반 프레임 뒤 그림 */
@@ -663,7 +676,7 @@ extern "C++" namespace Mednafen
 void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 {
 	auto &sys = static_cast<NgpSystem&>(*espec->sys);
-	if((sys.ss2FourXActive() || sys.ss2RaFrames() > 0) && sys.hasContent() && ss2fg_cur() && !ss2comm_overlay_active())
+	if((sys.ss2FourXActive() || sys.ss2SixtyPath() || sys.ss2RaFrames() > 0) && sys.hasContent() && ss2fg_cur() && !ss2comm_overlay_active())
 	{	/* 4배·런어헤드: 여기는 Emulate 안이다 — 커밋을 runFrame 으로 미루고 거기서 숨은 프레임을 돌린 뒤 올린다 */
 		sys.ss2FgCommitPending = true;
 		return;

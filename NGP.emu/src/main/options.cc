@@ -41,7 +41,7 @@ bool NgpSystem::readConfig(ConfigType type, MapIO &io, unsigned key)
 			case CFGKEY_SS2COMM_REF: return readOptionValue(io, ss2commRef);
 			case CFGKEY_SS2COMM_SIDES: return readOptionValue(io, ss2commSides);
 			case CFGKEY_SS2COMM_SCENECAP: return readOptionValue(io, ss2commSceneCap);
-			case CFGKEY_SS2_FRAMEGEN: return readOptionValue(io, ss2FrameGen);
+			case CFGKEY_SS2_FRAMEGEN: return readOptionValue(io, ss2FrameGen, [](auto v){ return v <= 2; });   /* 옛 bool(0·1)과 같은 1바이트 — 1 켬 · 2 60Hz 사이 그림만 · 0 끔 */
 			case CFGKEY_SS2_FRAMEGEN_MULT: return readOptionValue(io, ss2FrameGenMult);   /* 4 아니면 2배로 다룬다 */
 			case CFGKEY_SS2_RUNAHEAD: return readOptionValue(io, ss2RunAhead, [](auto v){ return v <= 2; });
 			case CFGKEY_SS2_FRAMEGEN_FX: return readOptionValue(io, ss2FrameGenFx, [](auto v){ return v <= 2; });
@@ -70,7 +70,7 @@ void NgpSystem::writeConfig(ConfigType type, FileIO &io)
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_REF, ss2commRef, true);
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_SIDES, ss2commSides, true);
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2COMM_SCENECAP, ss2commSceneCap, false);
-		writeOptionValueIfNotDefault(io, CFGKEY_SS2_FRAMEGEN, ss2FrameGen, true);
+		writeOptionValueIfNotDefault(io, CFGKEY_SS2_FRAMEGEN, ss2FrameGen, uint8_t{1});
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2_FRAMEGEN_MULT, ss2FrameGenMult, uint8_t{4});
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2_RUNAHEAD, ss2RunAhead, uint8_t{2});
 		writeOptionValueIfNotDefault(io, CFGKEY_SS2_FRAMEGEN_FX, ss2FrameGenFx, uint8_t{1});

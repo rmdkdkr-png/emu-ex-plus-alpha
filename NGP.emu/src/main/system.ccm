@@ -169,7 +169,10 @@ public:
 	   「프레임 타이밍 → 화면 주사율 덮어쓰기 = 120Hz」로 두면 vsync 두 번에 한 번은 빈 슬롯이 된다.
 	   그 슬롯에서 상태를 저장한 채 다음 프레임을 미리 돌려(소리 뮤트) 현재↔다음 중간 자리에
 	   현재 프레임의 타일을 다시 그려 올린다 — 추가 지연 0. 코어판 ss2fg 와 같은 엔진. */
-	bool ss2FrameGen{true};
+	/* 0 끔 · 1 켬(빈 vsync 슬롯이 오면 120 출력, 아니면 60Hz 사이 그림) · 2 60Hz 사이 그림만(120 출력 안 함 — 코어판 ngp_framegen=60, 패치 90).
+	   60Hz 사이 그림: 사무쇼2는 캐릭터·배경이 2프레임마다(30Hz) 바뀌므로, 4배의 2프레임 예측(ss2Predict4)을 그대로 돌려
+	   실제 프레임마다 τ=D 그림만 표면에 그린다(τ=D+½ 는 안 만듦) — 30→60Hz, 지연 없음, 런어헤드와 같이(D=N+2) */
+	uint8_t ss2FrameGen{1};
 	uint8_t ss2FrameGenMult{4};         /* 4 = 게임 박자 맞춤(N+1·N+2 예측, 사무쇼2는 2프레임에 한 번 움직인다) · 2 = 반 프레임 하나 */
 	bool interFrame(EmuSystemTaskContext, EmuVideo &);
 	bool ss2PredictFrame();
@@ -191,7 +194,10 @@ public:
 	bool ss2SnapSave();
 	void ss2SnapLoad(int pops);
 	bool ss2SlotsComing() const { return ss2FrameNo - ss2FgLastInter <= 2; }   /* 빈 vsync 슬롯이 오고 있다(120Hz) */
-	bool ss2FourXActive() const { return ss2FrameGen && ss2FrameGenMult == 4 && ss2SlotsComing(); }
+	bool ss2FourXActive() const { return ss2FrameGen == 1 && ss2FrameGenMult == 4 && ss2SlotsComing(); }
+	/* 60Hz 사이 그림 길: 「60Hz 사이 그림만」이거나, 켬인데 120 슬롯이 안 오는 동안(60Hz 화면·덮어쓰기 안 함) */
+	bool ss2SixtyPath() const { return ss2FrameGen == 2 || (ss2FrameGen == 1 && !ss2SlotsComing()); }
+	bool ss2FgNoNext{};                 /* 60Hz 사이 그림 — ss2Predict4 가 τ=D 만 그리고 τ=D+½(ss2FgNext)는 건너뛴다 */
 	bool ss2FgCommitPending{};
 	bool ss2FgNextOk{};
 	std::vector<uint8_t> ss2FgNext;
