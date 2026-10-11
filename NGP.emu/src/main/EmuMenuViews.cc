@@ -422,7 +422,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 
 	/* 서기 자세 — 서 있을 때 게임은 몸 포즈 6~8장을 6~18프레임씩 돌리며 윗몸이 1~2픽셀씩 움직인다(숨쉬기). 원래 해상도엔 그 사이가 없어
 	   툭툭 바뀐다. 그리기 = 게임 화면을 4배(640×608)로 올리며 앞뒤 포즈 사이를 ¼픽셀씩 옮겨 그려 잇는다(도트 그대로·섞지 않음, 같은
-	   동작을 두 번 본 뒤부터). 캐릭터·유파 고르기 화면의 미리보기도. 끔 = 원래대로. 코어 패치 95·96. */
+	   동작을 두 번 본 뒤부터). 캐릭터·유파 고르기 화면의 미리보기, 판 시작 전 소개·판 사이도. 끔 = 원래대로. 코어 패치 95·96·99. */
 	TextMenuItem ss2FrameGenIdleItem[2]
 	{
 		{"그리기 (¼픽셀, 화면 4배)", attachParams(), [this](){ system().ss2FrameGenIdle = 1; ss2fg_set_idle(1); }},
@@ -438,7 +438,9 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 
 	/* 동작 사이 그림 — 공격·맞기 같은 모든 포즈 바뀜의 사이를 미리 계산해 둔 모션 캐시(ss2_motion.bin — AI 흐름으로 «어느 픽셀을 어디서
 	   가져오나»만, 그림은 없음)로 그린다. 바뀌기 직전 2프레임에 ¼·½·¾. 서기 자세를 「그리기」로 켰을 때만. 캐시 파일은 저장 폴더나 롬 옆에
-	   두면 롬을 열 때 읽는다(버전 정보에 바뀜 수가 보임). 없거나 캐시에 없는 바뀜은 원래대로. 움직이는 몸(걷기·점프)도. 코어 패치 97·98. */
+	   두면 롬을 열 때 읽는다(버전 정보에 바뀜 수가 보임). 캐시는 PocketCore 공개 릴리즈의 legacito-ss2-motion.bin 을 이 이름으로.
+	   없거나 캐시에 없는 바뀜은 원래대로. 움직이는 몸(걷기·점프)도, 걷기 같은 되풀이 동작은 한 걸음 내내 고르게(확인 전엔 반까지만).
+	   코어 패치 97·98·99·99b·99c + main 고침(겹침·떨어진 조각·틀린 순환 예측). */
 	TextMenuItem ss2FrameGenMotionItem[2]
 	{
 		{"캐시로 그리기 (ss2_motion.bin)", attachParams(), [this](){ system().ss2FrameGenMotion = 1; ss2fg_set_motion(1); }},
@@ -463,7 +465,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 				? std::format(" · 모션 캐시 {}바뀜", system().ss2MotionCount)
 				: (system().hasContent() ? " · 모션 캐시 없음(ss2_motion.bin 을 저장 폴더나 롬 옆에)" : "");
 			app().postMessage(6, false,
-				std::format("NGPcustumSP 1.5.85-SS2-1.1.17 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트 + 몸 박자 + 포즈 섞기 + 60Hz 사이 그림 + 서기 ¼픽셀·고르기 화면 + 동작 사이 그림){}\n"
+				std::format("NGPcustumSP 1.5.85-SS2-1.1.18 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트 + 몸 박자 + 포즈 섞기 + 60Hz 사이 그림 + 서기 ¼픽셀·고르기 화면 + 동작 사이 그림){}\n"
 				"해설 엔진 SS2comm v" SS2COMM_VERSION
 				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL", mc));
 		}

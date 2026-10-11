@@ -72,7 +72,7 @@ static void resolve_chain(ss2fg_frame *f)
    k 0·1 = P1·P2, 2·3 = 그림자, 4~7 = 기술 이펙트·장풍. 카메라 X 0x176D, 대전 중 = 0x00A7 이 241 */
 #define FG_RAM_MODE   0x00A7
 #define FG_RAM_FIGHT  241
-#define FG_RAM_SELECT 240         /* 캐릭터 고르기·유파 고르기 화면 — 물체 0 = 가운데 미리보기 몸(발 80,76) */
+#define FG_RAM_SELECT 240         /* 대전 밖 — 캐릭터·유파 고르기 화면(물체 0 = 가운데 미리보기 몸 80,76), 판 시작 전 소개 */
 #define FG_RAM_CAMX   0x176D
 #define FG_RAM_OBJ    0x0E00
 static const uint8_t *fg_ram = 0;
@@ -84,19 +84,20 @@ static void capture_body(ss2fg_frame *f)
    const ss2fg_frame *pv = fg_hist[0] >= 0 ? &fg_slot[fg_hist[0]] : 0;   /* 직전 캡처 */
    int k, sel = 0;
    f->now_ok = (uint8_t)(fg_ram && fg_ram[FG_RAM_MODE] == FG_RAM_FIGHT);
-   /* 고르기 화면 미리보기 — 대전과 같은 서기 그림이 가운데에서 돈다(유저 「여기서는 안 되는 거?」·「대전이랑 같은 애니메이션 나옴」).
-      서기 그리기가 켜졌을 때만, 물체 0 이 미리보기 자리(80,76)·카메라 0 일 때만 몸 0 으로 본다 — 다른 몸·물체는 없음.
+   /* 대전 밖(모드 240) — 고르기 화면 미리보기(물체 0 = 가운데 80,76, 유저 「여기서는 안 되는 거?」, 패치 96) +
+      판 시작 전 소개(«いざ尋常に»·«一本目» 동안 두 캐릭터가 대전 자리에 서 있다 — 모드가 240 이라 사이 그림이 대전부터만 나왔다,
+      유저 「대전 시작 전에도 좀 되게」, 패치 99). 서기 그리기가 켜졌을 때만, 몸(물체 0·1)만 — 그림자·이펙트 물체는 안 본다.
       끄면 예전과 같다(대전 밖은 몸 없음) */
    if (!f->now_ok && id_on && fg_ram && fg_ram[FG_RAM_MODE] == FG_RAM_SELECT)
    {
       const uint8_t *o = fg_ram + FG_RAM_OBJ;
-      sel = !(o[0x36] == 0xFF && o[0x37] == 0xFF) && o[0x38] == 80 && o[0x3A] == 76 && fg_ram[FG_RAM_CAMX] == 0;
+      sel = !(o[0x36] == 0xFF && o[0x37] == 0xFF);
       f->now_ok = (uint8_t)sel;
    }
    f->ob_now_act = 0;
    for (k = 0; k < SS2FG_OBJS; k++)
    {
-      const uint8_t *o = f->now_ok && (!sel || k == 0) ? fg_ram + FG_RAM_OBJ + 0x40 * k : 0;
+      const uint8_t *o = f->now_ok && (!sel || k <= 1) ? fg_ram + FG_RAM_OBJ + 0x40 * k : 0;
       int act = o && !(o[0x36] == 0xFF && o[0x37] == 0xFF);
       f->ob_now_x[k] = act ? (uint8_t)(o[0x38] - fg_ram[FG_RAM_CAMX]) : 0;
       f->ob_now_y[k] = act ? o[0x3A] : 0;
@@ -236,6 +237,7 @@ static void draw_pattern(const ss2fg_frame *f, const ss2fg_regs *r, uint16_t *sc
    highmark = imin(r->winw + r->winx, SS2FG_W) - 1;
    if (right > highmark)
    {
+      if (right - highmark >= 8) return;      /* (main) 8 화소 모두 창 오른쪽 밖 — 그릴 것 없음. 그냥 두면 시프트가 32 이상(정의 안 된 동작, UBSan) */
       index >>= (right - highmark) * 2;
       right = highmark;
    }
@@ -273,7 +275,7 @@ static void draw_pattern_blend(const ss2fg_frame *f, const ss2fg_regs *r, uint16
    left     = imax(imax(x, r->winx), 0);
    right    = x + 7;
    highmark = imin(r->winw + r->winx, SS2FG_W) - 1;
-   if (right > highmark) { index >>= (right - highmark) * 2; right = highmark; }
+   if (right > highmark) { if (right - highmark >= 8) return; index >>= (right - highmark) * 2; right = highmark; }   /* (main) 위와 같은 시프트 막기 */
    for (xx = right; xx >= left; --xx, index >>= 2)
    {
       uint16_t c;
@@ -1090,17 +1092,27 @@ static int16_t pp_dx[64], pp_dy[64];
 static const ss2fg_frame *pp_to = 0;
 static int pp_ymin, pp_ymax;
 
-/* 조각의 겉모습 지문 — 플립·우선순위 비트, 팔레트, 타일 그림 16바이트 (same_piece 와 같은 것을 본다) */
+/* 조각의 겉모습 지문 — 반전(H/V)까지 적용한 8×8 2bpp 8줄의 FNV-1a(빈 조각 = 0). 팔레트·우선순위는 안 본다.
+   PocketCore 방 10_ss2fg_consensus.patch 의 piece_look 과 **바이트까지 같아야 한다**: body_sig(몸 포즈 지문)가 이걸로 만들어지고,
+   모션 캐시(ss2_motion.bin, 패치 97)의 색인·순환 표 열쇠가 바로 그 지문이다. 예전 main 은 «반전·우선순위 비트 + 팔레트 + 타일 16바이트»
+   를 해시해서(패치 80 이식 때 그쪽 piece_look 이 없어 대신 둔 것) 지문이 달라 진짜 캐시(44,438 바뀜)를 하나도 못 찾았다 */
 static uint64_t piece_look(const ss2fg_frame *f, int k)
 {
    uint16_t w = ld16(f->spr + k * 4);
-   const uint8_t *t = f->chr + (w & 0x1FF) * 16;
+   unsigned tile = w & 0x01FF, r;
    uint64_t h = 1469598103934665603ULL;
-   int i;
-   h = (h ^ (uint64_t)(w & 0xD800)) * 1099511628211ULL;
-   h = (h ^ (uint64_t)f->sprcol[k]) * 1099511628211ULL;
-   for (i = 0; i < 16; i++) h = (h ^ (uint64_t)t[i]) * 1099511628211ULL;
-   return h;
+   int any = 0;
+   if (!(w & 0x1800)) return 0;
+   for (r = 0; r < 8; r++)
+   {
+      unsigned row = (w & 0x4000) ? 7 - r : r;
+      uint16_t v = ld16(f->chr + tile * 16 + row * 2);
+      if (w & 0x8000) v = (uint16_t)(mirrored[(v & 0xff00) >> 8] | (mirrored[v & 0xff] << 8));
+      if (v) any = 1;
+      h = (h ^ (v & 0xff)) * 1099511628211ULL;
+      h = (h ^ (v >> 8)) * 1099511628211ULL;
+   }
+   return any ? (h | 1) : 0;                                   /* 빈 조각은 0 */
 }
 
 /* f 의 몸 p 조각 — 몸 팔레트(P1 0 · P2 5) 무리(sprite_moves 와 같은 무리 나누기) 중 테두리가 몸 자리 근처(body_vec 과 같은 창) */
@@ -1378,6 +1390,7 @@ typedef struct id_pose_s {
    uint8_t depth, first;        /* 몸 조각의 우선순위<<1, 가장 앞(가장 작은) 슬롯 */
    uint16_t c[ID_W * ID_H];     /* 팔레트<<2 | 색 번호(1~3), ID_NONE = 빈 화소. 색값이 아니라 번호로 — 같은 포즈라도 팔레트가 바뀐다
                                    (고르기 화면↔대전, 색 고르기, 화면이 어두워지는 때) — 기억한 색으로 그리면 사이 그림만 다른 색이 된다 */
+   uint16_t mincc;              /* (main) 그림의 8-이웃 덩이 중 가장 작은 것의 화소 수 — 캐시 사이 그림의 떨어진 조각 지우기에 쓴다 */
 } id_pose;
 
 typedef struct {
@@ -1395,6 +1408,7 @@ typedef struct { int on; id_pair *pr; int t256, ax, ay;
                  int kind;                    /* 0 = 서기(배운 바뀜, id_pair) · 1 = 모션 캐시 */
                  struct mc_ent *e; int ti; const struct id_pose_s *A, *B;
                  int gx, gy, gw, gh, depth, first; /* 4배 조각 틀: 몸 자리 기준 왼쪽 위·크기(1배), 깊이, 첫 슬롯 */
+                 int sx4, sy4;                /* 캐시 사이 그림을 더 미는 양(4배 화소) — 포즈 자리 어긋남을 t 만큼 나눠 메운다(패치 99c) */
                } id_req_t;
 typedef struct { int on, x0, y0, w, h; uint16_t px[(ID_W * ID_S) * (ID_H * ID_S)]; } id_patch_t;   /* px = 12비트 색(반전 적용) — 내보낼 때 색표를 거친다 */
 
@@ -1435,6 +1449,45 @@ static id_pose *id_find_pose(int p, uint64_t sg)
 }
 
 /* 몸 p 의 조각(마스크 m)을 몸 자리 기준 그림으로 — 슬롯 번호가 작은 조각이 앞(render_line 의 zbuf 규칙과 같음) */
+/* (main) 8-이웃 덩이 — 1배 칸 격자(occ[i] != 0 = 차 있음). lab 에 덩이 번호(1~), 반환 = 덩이 수, sz[번호] = 칸 수.
+   캐시 사이 그림에서 A/B 를 칸마다 고르다 남은 «떨어진 조각»(옛 칼끝, 새 칼끝만 먼저 온 것, 한 칸 티끌)을 찾는 데 쓴다 */
+static uint16_t id_cc_lab[ID_W * ID_H], id_cc_stk[ID_W * ID_H], id_cc_sz[ID_W * ID_H + 1];
+static int id_cc_label(const uint8_t *occ, int w, int h)
+{
+   int i, n = 0;
+   for (i = 0; i < w * h; i++) id_cc_lab[i] = 0;
+   for (i = 0; i < w * h; i++)
+   {
+      int sp = 0, cnt = 0;
+      if (!occ[i] || id_cc_lab[i]) continue;
+      n++; id_cc_lab[i] = (uint16_t)n; id_cc_stk[sp++] = (uint16_t)i;
+      while (sp)
+      {
+         int q = id_cc_stk[--sp], qx = q % w, qy = q / w, dx, dy;
+         cnt++;
+         for (dy = -1; dy <= 1; dy++)
+            for (dx = -1; dx <= 1; dx++)
+            {
+               int nx = qx + dx, ny = qy + dy, r;
+               if ((!dx && !dy) || nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+               r = ny * w + nx;
+               if (occ[r] && !id_cc_lab[r]) { id_cc_lab[r] = (uint16_t)n; id_cc_stk[sp++] = (uint16_t)r; }
+            }
+      }
+      id_cc_sz[n] = (uint16_t)(cnt > 65535 ? 65535 : cnt);
+   }
+   return n;
+}
+static uint16_t id_min_cc(const uint16_t *c, int w, int h)
+{
+   static uint8_t occ[ID_W * ID_H];
+   int i, n, m = 65535;
+   for (i = 0; i < w * h; i++) occ[i] = c[i] != ID_NONE;
+   n = id_cc_label(occ, w, h);
+   for (i = 1; i <= n; i++) if (id_cc_sz[i] < m) m = id_cc_sz[i];
+   return (uint16_t)m;
+}
+
 static void id_capture(const ss2fg_frame *f, int p, const uint8_t *m, uint64_t sg)
 {
    const ss2fg_regs *r = &f->line[0];
@@ -1488,6 +1541,7 @@ static void id_capture(const ss2fg_frame *f, int p, const uint8_t *m, uint64_t s
          }
       }
    }
+   ps->mincc = id_min_cc(ps->c, ps->w, ps->h);
    id_stats[5]++;
 }
 
@@ -1730,9 +1784,16 @@ typedef struct mc_ent {
 static FILE    *mc_f = 0;
 static mc_idx_t *mc_ix = 0;
 static uint32_t mc_n = 0;
+/* 순환 표(패치 99b) — 모아 둔 판들에서 본 되풀이 동작(걷기·서기 등)의 «A 다음 B, 길이». 파일 끝 12바이트 'SS2L' u32 개수 u32 자리,
+   항목 20바이트(u64 A, u64 B, u16 길이, u16 0), A 오름차순. 이걸로 배우기 전(그 판 처음 몇 걸음)부터 한 걸음 내내 편다 */
+typedef struct { uint64_t sa, sb; uint16_t hold; } mc_loop_t;
+static mc_loop_t *mc_lp = 0;
+static uint32_t mc_ln = 0;
 static int      mc_on = 0;
 static mc_ent   mc_c[8];
 static int      mc_stats[4];               /* [0] 찾음 [1] 있음 [2] 그림 [3] 틀 안 맞음 */
+static int      mc_bunk, mc_loopstop, mc_speck;   /* (main 계기) 틀 안 맞음 중 B 그림 없음 / 순환 예측 그만 / 지운 조각 칸 */
+void ss2fg_motion_stats2(int *out3) { out3[0] = mc_bunk; out3[1] = mc_loopstop; out3[2] = mc_speck; }
 void ss2fg_set_motion(int on) { mc_on = on ? 1 : 0; }
 /* 계기(main) — 캐시에 없던 바뀜(p, A→B)을 32개까지 쌓아 두고 하네스(tools/harness/fgrom.c FGROM_MOTION_LOG)가 꺼내 간다.
    그 포즈 틀(ss2fg_idle_pose_info)과 함께 가짜 캐시(tools/harness/motion_fake.py)를 만들어 그리는 길을 눌러 보는 용도. 출력엔 영향 없음 */
@@ -1775,6 +1836,7 @@ void ss2fg_motion_close(void)
    int i;
    if (mc_f) fclose(mc_f);
    mc_f = 0; free(mc_ix); mc_ix = 0; mc_n = 0;
+   free(mc_lp); mc_lp = 0; mc_ln = 0;
    for (i = 0; i < 8; i++) { free(mc_c[i].buf); memset(&mc_c[i], 0, sizeof mc_c[i]); }
 }
 /* 반환: 바뀜 수(0 이상), 없거나 틀리면 -1 */
@@ -1797,7 +1859,40 @@ int ss2fg_motion_open(const char *path)
    }
    free(ib);
    mc_n = n;
+   {  /* 순환 표(있으면) */
+      uint8_t tr[12];
+      if (!fseek(mc_f, -12, SEEK_END) && fread(tr, 1, 12, mc_f) == 12 && !memcmp(tr, "SS2L", 4))
+      {
+         uint32_t ln = mc_rd32(tr + 4), lo = mc_rd32(tr + 8);
+         uint8_t *lb;
+         if (ln && ln < 1000000u && (lb = (uint8_t *)malloc((size_t)ln * 20)) != 0)
+         {
+            if (!fseek(mc_f, (long)lo, SEEK_SET) && fread(lb, 20, ln, mc_f) == ln && (mc_lp = (mc_loop_t *)malloc((size_t)ln * sizeof *mc_lp)) != 0)
+            {
+               for (i = 0; i < ln; i++)
+               {
+                  mc_lp[i].sa = mc_rd64(lb + i * 20); mc_lp[i].sb = mc_rd64(lb + i * 20 + 8);
+                  mc_lp[i].hold = (uint16_t)(lb[i * 20 + 16] | (lb[i * 20 + 17] << 8));
+               }
+               mc_ln = ln;
+            }
+            free(lb);
+         }
+      }
+   }
    return (int)n;
+}
+/* 순환 표에서 A 다음 — 없으면 0 */
+static uint64_t mc_loop_next(uint64_t sa, unsigned *hold)
+{
+   int lo = 0, hi = (int)mc_ln - 1;
+   while (lo <= hi)
+   {
+      int mid = (lo + hi) >> 1;
+      if (mc_lp[mid].sa == sa) { *hold = mc_lp[mid].hold; return mc_lp[mid].sb; }
+      if (mc_lp[mid].sa < sa) lo = mid + 1; else hi = mid - 1;
+   }
+   return 0;
 }
 static mc_ent *mc_get(uint64_t sa, uint64_t sb)
 {
@@ -1843,6 +1938,11 @@ static mc_ent *mc_get(uint64_t sa, uint64_t sb)
       e->ro[t] = at + 2; e->mo[t] = e->ro[t] + rb; e->fo[t] = e->mo[t] + ((n + 7) >> 3);
       at = e->fo[t] + n * 2;
       if (at > rawlen) { free(raw); e->buf = 0; return 0; }
+      {  /* 칸 비트 수 = n 이어야(패치 99c) — 아니면 mc_draw 가 이동값 뒤를 넘어 읽는다(일부러 만든 파일만 — zlib 검사합이 우연한 깨짐은 막는다) */
+         uint32_t c, cnt = 0, nb = (uint32_t)e->w * e->h;
+         for (c = 0; c < nb; c++) cnt += (raw[e->ro[t] + (c >> 3)] >> (c & 7)) & 1;
+         if (cnt != n) { free(raw); e->buf = 0; return 0; }
+      }
    }
    e->buf = raw; e->blen = rawlen;
    return e;
@@ -1881,6 +1981,54 @@ static void mc_draw(const mc_ent *e, int ti, const id_pose *A, const id_pose *B,
             }
       }
 }
+/* (main) 캐시 사이 그림의 떨어진 작은 조각 지우기. 칸마다 A/B 를 고르는 캐시라, 한쪽에만 있는 칼·팔이 이웃 칸과 다른 쪽을 골라
+   몸에서 떨어진 채 남는다(검수: 옛 칼끝·새 칼끝만 먼저 온 것·한 칸 티끌·떠 있는 팔뚝 — 148 띠 중 14). A·B 둘 다 그런 작은 덩이가 없는
+   그림일 때만(속도선·떨어진 이펙트가 원래 그림에 있으면 손대지 않는다), MC_SPECK 칸 미만이고 가장 큰 덩이의 절반 미만인 덩이를 비운다.
+   비운 자리는 몸 뺀 줄(배경·다른 스프라이트)이 보인다. 반환 = 지운 칸 수 */
+#define MC_SPECK 16
+static int mc_despeckle(uint16_t *out, int w, int h, const id_pose *A, const id_pose *B)
+{
+   static uint8_t occ[ID_W * ID_H];
+   int W4 = w * ID_S, x, y, a, b, n, i, big = 0, gone = 0;
+   if (A->mincc < MC_SPECK || B->mincc < MC_SPECK) return 0;
+   for (y = 0; y < h; y++)
+      for (x = 0; x < w; x++)
+      {
+         int any = 0;
+         for (b = 0; b < ID_S && !any; b++) for (a = 0; a < ID_S; a++) if (out[(y * ID_S + b) * W4 + x * ID_S + a] != ID_NONE) { any = 1; break; }
+         occ[y * w + x] = (uint8_t)any;
+      }
+   n = id_cc_label(occ, w, h);
+   if (n < 2) return 0;
+   for (i = 1; i <= n; i++) if (id_cc_sz[i] > big) big = id_cc_sz[i];
+   for (y = 0; y < h; y++)
+      for (x = 0; x < w; x++)
+      {
+         int l = id_cc_lab[y * w + x];
+         if (!l || id_cc_sz[l] >= MC_SPECK || id_cc_sz[l] * 2 >= big) continue;
+         for (b = 0; b < ID_S; b++) for (a = 0; a < ID_S; a++) out[(y * ID_S + b) * W4 + x * ID_S + a] = ID_NONE;
+         gone++;
+      }
+   return gone;
+}
+
+/* 몸 p 의 그림 왼쪽 위(몸 조각 최소 − 물체 자리) — 포즈 그림(id_capture)과 같은 셈. 몸이 없으면 0 */
+static int mc_top_left(const ss2fg_frame *f, int p, int *x, int *y)
+{
+   uint8_t m[64];
+   int k, x0 = 9999, y0 = 9999;
+   if (!f || !f->body_ok || !body_mask(f, p, m)) return 0;
+   for (k = 0; k < 64; k++)
+      if (m[k])
+      {
+         int sx = wrapx(f->ax[k] + f->line[0].spx) - f->ob_x[p], sy = wrapc(f->ay[k] + f->line[0].spy) - f->ob_y[p];
+         if (sx < x0) x0 = sx;
+         if (sy < y0) y0 = sy;
+      }
+   if (x0 == 9999) return 0;
+   *x = x0; *y = y0;
+   return 1;
+}
 /* 출력 칸 slot 의 몸 p — D+1·D+2 에서 포즈가 바뀌면(제자리) 캐시로. 1 = 계획함 */
 static int mc_plan(const ss2fg_frame *f0, const ss2fg_frame *f1, const ss2fg_frame *f2, unsigned realn, int h, int slot, int p)
 {
@@ -1900,25 +2048,76 @@ static int mc_plan(const ss2fg_frame *f0, const ss2fg_frame *f1, const ss2fg_fra
       sg = body_sig(g, mm);
       if (sg != id_cur[p]) { sb = sg; K = k; fk = g; break; }
    }
-   if (!K) return 0;
-   L = (int)(realn + (unsigned)K - id_start[p]);                                   /* A 가 보이는 프레임 수(바뀔 때까지) */
-   if (L > 2) L = 2;
-   if (L < 1) return 0;
-   num = 2 * L - (2 * K - h);                                                      /* t = num / (2L) */
-   if (num <= 0) return 0;
-   ti = L == 2 ? num - 1 : 1;                                                      /* ¼·½·¾ 칸 */
-   if (ti < 0 || ti > 2) return 0;
+   /* 되풀이 동작(배운 순환 — 걷기 등): 다음 포즈를 미리 알면 사이 그림을 한 걸음 내내 고르게 편다(패치 99).
+      바뀌기 직전 2 프레임에만 몰면, 걷기는 몸은 120Hz 로 매끄럽게 가는데 다리는 6 프레임 멈춰 미끄러지듯 보였다
+      (유저 「앞으로 올 때 슬라이딩하는 것처럼 보일 때가 있다」). t = 지난 시간/길이 → ¼·½·¾ 중 가까운 칸(⅛ 전엔 A 그대로).
+      미리 돌린 D+1·D+2 가 다른 포즈면 순환이 아닌 것으로 — 아래 «마지막 2 프레임» 으로 그 포즈를 향한다 */
+   {
+      unsigned hold = 0;
+      uint64_t nb = id_next(p, id_cur[p], id_prev[p], &hold);
+      int loop = nb && hold >= 3 && hold <= 60 && id_loop(p, id_cur[p], nb) && (!K || sb == nb);
+      if (!loop && mc_ln)
+      {  /* 아직 못 배웠으면 캐시의 순환 표로(패치 99b) */
+         unsigned h2 = 0;
+         uint64_t cb = mc_loop_next(id_cur[p], &h2);
+         if (cb && h2 >= 3 && h2 <= 60 && (!K || sb == cb)) { nb = cb; hold = h2; loop = 1; }
+      }
+      if (!K && !loop) return 0;
+      if (loop && !K && (int)(realn - id_start[p]) > (int)hold + 2)
+      {  /* (main) 배운 길이를 2 프레임 넘게 지났는데 D+1·D+2 에도 바뀜이 없다 — 이번엔 순환이 아니다(걷다 멈춤, 막기, 다른 갈래).
+            예전엔 t 가 1 쪽으로 기어가며 오지 않을 포즈를 ¾ 로 붙든 채 남았다(검수: 19 실제 프레임 동안 다른 자세, s133~s139) */
+         mc_loopstop++;
+         return 0;
+      }
+      if (loop)
+      {
+         int e2 = 2 * (int)(realn - id_start[p]) + h, tot2;
+         if (!K) sb = nb;
+         tot2 = K ? 2 * (int)(realn + (unsigned)K - id_start[p]) : 2 * (int)hold;
+         if (!K && tot2 < e2 + 6) tot2 = e2 + 6;                                 /* D+2 까진 안 바뀜 — 적어도 3 프레임 남음 */
+         if (tot2 <= 0 || e2 < 0) return 0;
+         ti = (8 * e2 + tot2) / (2 * tot2) - 1;                                   /* round(4t) − 1 */
+         if (ti < 0) return 0;
+         if (ti > 2) ti = 2;
+         if (!K && ti > 1) ti = 1;   /* (main) 아직 미리 본 프레임으로 확인 못 한 예측은 ½ 까지만 — 틀리면(다른 갈래로 감) 반쯤 간 자세에서 돌아온다
+                                        (검수 s024~s026: 오지 않을 포즈로 ¾ 까지 갔다가 한 번에 되돌아와 팔이 내려-올라-내려). 걷기(한 걸음 6 프레임)는
+                                        확인 전 구간이 원래 ½ 를 안 넘어 그대로 */
+      }
+      else
+      {
+         L = (int)(realn + (unsigned)K - id_start[p]);                            /* A 가 보이는 프레임 수(바뀔 때까지) */
+         if (L > 2) L = 2;
+         if (L < 1) return 0;
+         num = 2 * L - (2 * K - h);                                               /* t = num / (2L) */
+         if (num <= 0) return 0;
+         ti = L == 2 ? num - 1 : 1;                                               /* ¼·½·¾ 칸 */
+         if (ti < 0 || ti > 2) return 0;
+      }
+   }
    e = mc_get(id_cur[p], sb);
    if (!e) { mc_miss_push(p, id_cur[p], sb); return 0; }
    A = id_find_pose(p, id_cur[p]);
    B = id_find_pose(p, sb);
-   if (!B) { id_capture(fk, p, mm, sb); B = id_find_pose(p, sb); }
-   if (!A || !B || A->depth != B->depth || A->w != e->aw || A->h != e->ah || B->w != e->bw || B->h != e->bh
-       || B->ox - A->ox != e->bdx || B->oy - A->oy != e->bdy) { mc_stats[3]++; return 0; }
+   if (!B && fk) { id_capture(fk, p, mm, sb); B = id_find_pose(p, sb); }
+   if (A && !B && !fk) { mc_bunk++; mc_stats[3]++; return 0; }   /* (main 계기) 되풀이 길의 다음 포즈를 아직 못 봤거나 잊음 — 캐시엔 그림이 없다 */
+   if (!A || !B || A->depth != B->depth || A->w != e->aw || A->h != e->ah || B->w != e->bw || B->h != e->bh) { mc_stats[3]++; return 0; }
+   {  /* 자리(패치 99c) — 전엔 기억한 두 포즈의 «물체 자리 기준 왼쪽 위» 차가 캐시의 B 자리(bdx·bdy)와 한 픽셀이라도 다르면 버렸다.
+         물체 자리(RAM)와 스프라이트가 움직일 때 한 박자 어긋나 같은 포즈라도 잡힌 때마다 1~3 픽셀 달라, 바뀜의 10% 가 사이 그림 없이 툭 바뀌었다(검수 2026-10-11).
+         이제 A 는 지금 D 의 실제 자리에 놓고, B 는 D+K 의 실제 자리(K 를 모르는 되풀이 동작은 기억한 자리)와 캐시 자리의 차를 t 만큼 나눠 밀어 메운다.
+         차가 4 픽셀을 넘으면 다른 상황으로 보고 예전처럼 툭 */
+      int ax0, ay0, bx0, by0, rbx, rby, dx, dy;
+      if (!mc_top_left(f0, p, &ax0, &ay0)) { ax0 = A->ox; ay0 = A->oy; }
+      if (fk && mc_top_left(fk, p, &bx0, &by0)) { rbx = bx0 - ax0; rby = by0 - ay0; }
+      else { rbx = B->ox - A->ox; rby = B->oy - A->oy; }
+      dx = rbx - e->bdx; dy = rby - e->bdy;
+      if (dx < -4 || dx > 4 || dy < -4 || dy > 4) { mc_stats[3]++; return 0; }
+      rq->gx = ax0 + e->cx; rq->gy = ay0 + e->cy;
+      rq->sx4 = (ti + 1) * dx; rq->sy4 = (ti + 1) * dy;   /* t = (ti+1)/4 → 4배 화소로 t·차·4 */
+   }
    rq->on = 1; rq->kind = 1; rq->pr = 0; rq->t256 = 64 * (ti + 1);
    rq->e = e; rq->ti = ti; rq->A = A; rq->B = B;
    rq->ax = f0->ob_x[p]; rq->ay = f0->ob_y[p];              /* 몸 자리는 보여 줄 D 의 것 — 움직이는 몸은 그리기에서 몸 조각의 옮김만큼 더 민다(패치 98) */
-   rq->gx = A->ox + e->cx; rq->gy = A->oy + e->cy; rq->gw = e->w; rq->gh = e->h;
+   rq->gw = e->w; rq->gh = e->h;
    rq->depth = A->depth; rq->first = A->first < B->first ? A->first : B->first;
    return 1;
 }
@@ -1938,8 +2137,8 @@ void ss2fg_idle_observe(const ss2fg_frame *f, unsigned realn)
       ax = f->ob_x[p]; ay = f->ob_y[p];
       if (!id_find_pose(p, sg)) id_capture(f, p, m, sg);
       if (sg == id_cur[p]) { if (ax != id_ax[p] || ay != id_ay[p]) id_still[p] = 0; continue; }
-      if (id_cur[p] && id_still[p] && ax == id_ax[p] && ay == id_ay[p])
-      {
+      if (id_cur[p])
+      {  /* 움직이는 바뀜도 배운다(패치 99) — 걷기 순환을 알아야 사이 그림을 한 걸음 내내 펼 수 있다. 서기 그리기(±3)는 여전히 제자리만 */
          unsigned hold = realn - id_start[p];
          if (hold >= 3 && hold <= 60) id_learn_add(p, id_cur[p], sg, hold);
          id_prev[p] = id_cur[p];
@@ -2000,7 +2199,7 @@ static int id_plan_learned(const ss2fg_frame *f0, const ss2fg_frame *f1, const s
       /* 큰 바뀜(사이 그림이 반쯤에서 뒤 그림으로 넘어감)은 되풀이 동작(서기)일 때만 — 착지→서기·공격 끝 자세→서기처럼 한 번 지나가는
          바뀜이면 그 자세가 끝나는 때가 앞당겨 보인다 */
       if (!pr->small && !id_loop(p, id_cur[p], sb)) return 0;
-      rq->on = 1; rq->kind = 0; rq->pr = pr; rq->t256 = t256;
+      rq->on = 1; rq->kind = 0; rq->pr = pr; rq->t256 = t256; rq->sx4 = rq->sy4 = 0;
       rq->ax = id_ax[p]; rq->ay = id_ay[p];
       rq->gx = pr->ox; rq->gy = pr->oy; rq->gw = pr->w; rq->gh = pr->h; rq->depth = pr->depth; rq->first = pr->first;
       id_stats[1]++;
@@ -2019,9 +2218,10 @@ static void id_build(const ss2fg_frame *base, const ss2fg_frame *to_scr, int t_s
       id_req_t *rq = &id_rq[s][p];
       id_patch_t *pt = &id_pt[s][p];
       uint8_t m[64], zrow[256];
-      int16_t srow[256];
-      uint16_t scan[256];
-      int k, ux0, uy0, x0, y0, x1, y1, y, x, sx, sy, W4, mvx, mvy;
+      int16_t srow[256], brow[256];
+      uint16_t scan[256], bscan[256];
+      uint8_t minv[64], bz[256];
+      int k, ux0, uy0, x0, y0, x1, y1, y, x, sx, sy, W4, mvx, mvy, sh4x = 0, sh4y = 0;
       pt->on = 0;
       if (!rq->on || pp_on || fx_fade_on) continue;           /* 포즈·이펙트 섞기 중엔 몸 뺀 줄을 같게 못 만든다 */
       if (!body_mask(base, p, m)) continue;
@@ -2038,31 +2238,51 @@ static void id_build(const ss2fg_frame *base, const ss2fg_frame *to_scr, int t_s
          if (!same || (rq->kind == 0 && (mvx || mvy))) continue;
       }
       if (rq->gw * ID_S * rq->gh * ID_S > (int)(sizeof id_tc / sizeof id_tc[0])) continue;
-      if (rq->kind == 1) { mc_draw(rq->e, rq->ti, rq->A, rq->B, id_tc); mc_stats[2]++; }
+      if (rq->kind == 1) { mc_draw(rq->e, rq->ti, rq->A, rq->B, id_tc); mc_stats[2]++; mc_speck += mc_despeckle(id_tc, rq->gw, rq->gh, rq->A, rq->B); }
       else id_draw(rq->pr, rq->t256, id_tc);
       W4 = rq->gw * ID_S;
       ux0 = rq->ax + rq->gx + mvx; uy0 = rq->ay + rq->gy + mvy;
-      x0 = ux0 < 0 ? 0 : ux0; y0 = uy0 < 0 ? 0 : uy0;
-      x1 = ux0 + rq->gw > SS2FG_W ? SS2FG_W : ux0 + rq->gw;
-      y1 = uy0 + rq->gh > SS2FG_H ? SS2FG_H : uy0 + rq->gh;
+      {  /* 캐시 사이 그림의 4배 밀기(패치 99c) — 틀이 그만큼 한두 픽셀 넓어진다. 조각 버퍼를 넘으면 밀지 않는다 */
+         int s4x = rq->sx4, s4y = rq->sy4;
+         int ex0 = s4x < 0 ? -((-s4x + ID_S - 1) / ID_S) : 0, ex1 = s4x > 0 ? (s4x + ID_S - 1) / ID_S : 0;
+         int ey0 = s4y < 0 ? -((-s4y + ID_S - 1) / ID_S) : 0, ey1 = s4y > 0 ? (s4y + ID_S - 1) / ID_S : 0;
+         if ((rq->gw + ex1 - ex0) * (rq->gh + ey1 - ey0) > ID_W * ID_H) { s4x = s4y = 0; ex0 = ex1 = ey0 = ey1 = 0; }
+         sh4x = s4x; sh4y = s4y;
+         x0 = ux0 + ex0 < 0 ? 0 : ux0 + ex0; y0 = uy0 + ey0 < 0 ? 0 : uy0 + ey0;
+         x1 = ux0 + rq->gw + ex1 > SS2FG_W ? SS2FG_W : ux0 + rq->gw + ex1;
+         y1 = uy0 + rq->gh + ey1 > SS2FG_H ? SS2FG_H : uy0 + rq->gh + ey1;
+      }
       if (x1 <= x0 || y1 <= y0) continue;
-      rl_skip = m; rl_zout = zrow; rl_slot = srow;
+      for (k = 0; k < 64; k++) minv[k] = (uint8_t)!m[k];
       for (y = y0; y < y1; y++)
       {
          const ss2fg_regs *rb = &base->line[y];
          int in_win = (y >= rb->winy) && (y < rb->winy + rb->winh);
          int wx0 = rb->winx, wx1 = imin(rb->winx + rb->winw, SS2FG_W);
+         if (rq->kind == 1)
+         {  /* (main) 지금 프레임(D)에서 몸 조각만 그린 줄 — 화소마다 그 자리를 칠한 몸 조각의 슬롯(brow, 없으면 −1) */
+            rl_skip = minv; rl_zout = bz; rl_slot = brow;
+            render_line(base, to_scr, offx, offy, t_scr, y, bscan);
+         }
+         rl_skip = m; rl_zout = zrow; rl_slot = srow;
          render_line(base, to_scr, offx, offy, t_scr, y, scan);
          for (sy = 0; sy < ID_S; sy++)
          {
             uint16_t *dst = pt->px + ((y - y0) * ID_S + sy) * ((x1 - x0) * ID_S);
-            const uint16_t *tw = id_tc + ((y - uy0) * ID_S + sy) * W4;
+            int ty = (y - uy0) * ID_S + sy - sh4y;
+            const uint16_t *tw = (ty >= 0 && ty < rq->gh * ID_S) ? id_tc + ty * W4 : 0;
             for (x = x0; x < x1; x++)
                for (sx = 0; sx < ID_S; sx++)
                {
-                  uint16_t c = scan[x], v = tw[(x - ux0) * ID_S + sx];
+                  int tx = (x - ux0) * ID_S + sx - sh4x;
+                  uint16_t c = scan[x], v = (tw && tx >= 0 && tx < W4) ? tw[tx] : ID_NONE;
+                  /* (main) 캐시 그림은 지금 프레임(D)에서 그 화소를 칠한 몸 조각의 슬롯으로 겹친다 — 몸 단위 first(가장 앞 슬롯)로 보면 그보다
+                     뒤지만 그 자리 몸 조각보다는 앞인 상대 발·창·타격 불꽃을 덮었다(검수 s055·s105·s108). D 의 몸이 없는 자리(B 에서 새로 생긴
+                     부분)는 예전대로 first. 포즈를 잡은 옛 프레임의 슬롯은 쓰지 않는다 — 슬롯 순서가 프레임마다 달라 발바닥이 그림자 뒤로 가는 등
+                     오히려 틀렸다(2차 검수 22곳). 서기 그림(kind 0)은 예전대로 first */
+                  int vs = (rq->kind == 1 && brow[x] >= 0) ? brow[x] : rq->first;
                   if (v != ID_NONE && in_win && x >= wx0 && x < wx1
-                      && (rq->depth > zrow[x] || (rq->depth == zrow[x] && srow[x] > rq->first)))
+                      && (rq->depth > zrow[x] || (rq->depth == zrow[x] && srow[x] > vs)))
                   {
                      uint16_t col = ld16(base->pal + ((v >> 2) << 3) + ((v & 3) << 1)) & 0x0FFF;   /* 번호 → 그 프레임 팔레트(패치 96) */
                      c = rb->neg ? (uint16_t)~col : col;
