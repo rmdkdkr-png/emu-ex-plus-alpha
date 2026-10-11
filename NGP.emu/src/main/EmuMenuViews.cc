@@ -436,16 +436,36 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		ss2FrameGenIdleItem
 	};
 
+	/* 동작 사이 그림 — 공격·맞기 같은 모든 포즈 바뀜의 사이를 미리 계산해 둔 모션 캐시(ss2_motion.bin — AI 흐름으로 «어느 픽셀을 어디서
+	   가져오나»만, 그림은 없음)로 그린다. 바뀌기 직전 2프레임에 ¼·½·¾. 서기 자세를 「그리기」로 켰을 때만. 캐시 파일은 저장 폴더나 롬 옆에
+	   두면 롬을 열 때 읽는다(버전 정보에 바뀜 수가 보임). 없거나 캐시에 없는 바뀜은 원래대로. 움직이는 몸(걷기·점프)도. 코어 패치 97·98. */
+	TextMenuItem ss2FrameGenMotionItem[2]
+	{
+		{"캐시로 그리기 (ss2_motion.bin)", attachParams(), [this](){ system().ss2FrameGenMotion = 1; ss2fg_set_motion(1); }},
+		{"끔",                              attachParams(), [this](){ system().ss2FrameGenMotion = 0; ss2fg_set_motion(0); }},
+	};
+
+	MultiChoiceMenuItem ss2FrameGenMotion
+	{
+		"프레임 생성 — 동작 사이 그림", attachParams(),
+		system().ss2FrameGenMotion ? 0 : 1,
+		ss2FrameGenMotionItem
+	};
+
 	/* 버전 정보 — 앱 버전은 metadata/conf.mk 의 android_metadata_version 과 같이 올린다 */
 	TextMenuItem ss2Version
 	{
 		"버전 정보", attachParams(),
 		[this]()
 		{
+			/* 모션 캐시 상태 — 롬을 열 때 저장 폴더·롬 옆에서 ss2_motion.bin 을 찾은 결과(바뀜 수 / 없음) */
+			std::string mc = system().ss2MotionCount >= 0
+				? std::format(" · 모션 캐시 {}바뀜", system().ss2MotionCount)
+				: (system().hasContent() ? " · 모션 캐시 없음(ss2_motion.bin 을 저장 폴더나 롬 옆에)" : "");
 			app().postMessage(6, false,
-				"NGPcustumSP 1.5.85-SS2-1.1.16 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트 + 몸 박자 + 포즈 섞기 + 60Hz 사이 그림 + 서기 ¼픽셀·고르기 화면)\n"
+				std::format("NGPcustumSP 1.5.85-SS2-1.1.17 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트 + 몸 박자 + 포즈 섞기 + 60Hz 사이 그림 + 서기 ¼픽셀·고르기 화면 + 동작 사이 그림){}\n"
 				"해설 엔진 SS2comm v" SS2COMM_VERSION
-				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL");
+				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL", mc));
 		}
 	};
 
@@ -470,6 +490,7 @@ public:
 		item.emplace_back(&ss2FrameGenFx);
 		item.emplace_back(&ss2FrameGenPose);
 		item.emplace_back(&ss2FrameGenIdle);
+		item.emplace_back(&ss2FrameGenMotion);
 		item.emplace_back(&ss2Version);
 		item.emplace_back(&saveFilenameType);
 	}

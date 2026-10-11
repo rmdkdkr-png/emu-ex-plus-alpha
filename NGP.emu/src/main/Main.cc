@@ -164,6 +164,8 @@ WallClockTimePoint NgpSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 
 void NgpSystem::closeSystem()
 {
+	ss2fg_motion_close();                       /* 모션 캐시 파일 닫기(코어 패치 97) */
+	ss2MotionCount = -1;
 	mdfnGameInfo.CloseGame();
 }
 
@@ -191,6 +193,17 @@ void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	ss2fg_set_fx(ss2FrameGenFx);                /* 이펙트·장풍 규칙(옮기기/섞기/끔) — 메뉴에서 바꾸면 거기서도 넘긴다 */
 	ss2fg_set_pose(ss2FrameGenPose);            /* 날아가는 몸 포즈 섞기(섞기/끔) */
 	ss2fg_set_idle(ss2FrameGenIdle);            /* 서기 자세 ¼픽셀 사이 그림(그리기/끔) */
+	ss2fg_set_motion(ss2FrameGenMotion);        /* 동작 사이 그림 — 모션 캐시(캐시로 그리기/끔, 코어 패치 97) */
+	ss2MotionCount = -1;
+	if(!svcsp_rom_ok())
+	{	/* 캐시 파일 ss2_motion.bin — 저장 폴더, 그 다음 롬 옆. 이 앱엔 내려받기가 없어 유저가 둔다(PocketCore 는 업데이트 때 팩으로 받음).
+		   없으면 열기 -1 로 조용히 — 사이 그림은 서기(배운 되풀이)만. 코어판 libretro.c 의 <시스템 폴더>/ss2_motion.bin 과 같은 파일 */
+		for(auto &p : {contentSavePath("ss2_motion.bin"), contentDirectory("ss2_motion.bin")})
+		{
+			ss2MotionCount = ss2fg_motion_open(p.data());
+			if(ss2MotionCount >= 0) break;
+		}
+	}
 	svcsp_set_engine(1);                        /* SVC 롬이면 모던 조작 — 끄기는 「원버튼 필살기」 옵션 공용 */
 	ss2comm_overlay_spmode(svcsp_rom_ok());     /* 오버레이 SP 페이지가 svcsp 표를 쓴다 */
 	MDFN_IEN_NGP::SetPixelFormat(toMDFNSurface(mSurfacePix).format);

@@ -86,6 +86,7 @@ enum NgpConfigKey
 	CFGKEY_SS2COMM_SCENECAP = 280, CFGKEY_SS2COMM_SIDEBG = 281,
 	CFGKEY_SS2_FRAMEGEN = 282, CFGKEY_SS2_FRAMEGEN_MULT = 283, CFGKEY_SS2_RUNAHEAD = 284,
 	CFGKEY_SS2_FRAMEGEN_FX = 285, CFGKEY_SS2_FRAMEGEN_POSE = 286, CFGKEY_SS2_FRAMEGEN_IDLE = 287,
+	CFGKEY_SS2_FRAMEGEN_MOTION = 288,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -191,6 +192,11 @@ public:
 	/* 서기 자세 — 서 있을 때 숨 쉬듯 1~2픽셀씩 바뀌는 포즈(6~8장 순환) 사이를 4배 격자에 ¼픽셀씩 옮겨 그려 잇는다(코어판 ngp_framegen_idle, 패치 95).
 	   켜면 사무쇼2 게임 화면(띠·기둥 없을 때)을 640×608 로 올린다 — 조각 밖은 단순 4배라 보기엔 같다. 1 그리기(기본) · 0 끔 */
 	uint8_t ss2FrameGenIdle{1};
+	/* 동작 사이 그림 — 공격·맞기 등 모든 포즈 바뀜의 사이를 미리 계산한 모션 캐시(ss2_motion.bin: 칸마다 앞뒤 어느 포즈에서 어디를 가져오나,
+	   그림 없음)로 그린다(코어판 ngp_framegen_motion, 패치 97). 서기 자세 그리기가 켜졌을 때만. 캐시 파일은 저장 폴더나 롬 옆에 유저가 둔다 —
+	   없으면 원래대로. 1 캐시로 그리기(기본) · 0 끔 */
+	uint8_t ss2FrameGenMotion{1};
+	int ss2MotionCount{-1};             /* 연 캐시의 바뀜 수(-1 = 파일 없음) — 버전 정보에 보여 준다 */
 	int ss2IdleSlot{-1};                /* 이번 출력이 쓸 서기 조각 칸: 0 τD(실제 프레임) · 1 τD+½(빈 슬롯) · -1 없음 */
 	std::vector<uint8_t> ss2Idle4;      /* 4배 출력 버퍼(화면 형식 그대로) */
 	bool ss2IdleActive() const;         /* 서기 그리기가 지금 4배로 내보내는 중인가(사무쇼2·프레임 생성 켬·띠·기둥 없음) */
