@@ -420,6 +420,22 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		ss2FrameGenPoseItem
 	};
 
+	/* 서기 자세 — 서 있을 때 게임은 몸 포즈 6~8장을 6~18프레임씩 돌리며 윗몸이 1~2픽셀씩 움직인다(숨쉬기). 원래 해상도엔 그 사이가 없어
+	   툭툭 바뀐다. 그리기 = 게임 화면을 4배(640×608)로 올리며 앞뒤 포즈 사이를 ¼픽셀씩 옮겨 그려 잇는다(도트 그대로·섞지 않음, 같은
+	   동작을 두 번 본 뒤부터). 끔 = 원래대로. 코어 패치 95. */
+	TextMenuItem ss2FrameGenIdleItem[2]
+	{
+		{"그리기 (¼픽셀, 화면 4배)", attachParams(), [this](){ system().ss2FrameGenIdle = 1; ss2fg_set_idle(1); }},
+		{"끔",                        attachParams(), [this](){ system().ss2FrameGenIdle = 0; ss2fg_set_idle(0); }},
+	};
+
+	MultiChoiceMenuItem ss2FrameGenIdle
+	{
+		"프레임 생성 — 서기 자세", attachParams(),
+		system().ss2FrameGenIdle ? 0 : 1,
+		ss2FrameGenIdleItem
+	};
+
 	/* 버전 정보 — 앱 버전은 metadata/conf.mk 의 android_metadata_version 과 같이 올린다 */
 	TextMenuItem ss2Version
 	{
@@ -427,7 +443,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper
 		[this]()
 		{
 			app().postMessage(6, false,
-				"NGPcustumSP 1.5.85-SS2-1.1.14 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트 + 몸 박자 + 포즈 섞기 + 60Hz 사이 그림)\n"
+				"NGPcustumSP 1.5.85-SS2-1.1.15 (프레임 생성 120Hz · 4배 + 몸·물체 + 런어헤드 + 이펙트 + 몸 박자 + 포즈 섞기 + 60Hz 사이 그림 + 서기 ¼픽셀)\n"
 				"해설 엔진 SS2comm v" SS2COMM_VERSION
 				" · Robert Broglia의 NGP.emu(EmuEx)·Mednafen 기반 · GPL");
 		}
@@ -453,6 +469,7 @@ public:
 		item.emplace_back(&ss2RunAhead);
 		item.emplace_back(&ss2FrameGenFx);
 		item.emplace_back(&ss2FrameGenPose);
+		item.emplace_back(&ss2FrameGenIdle);
 		item.emplace_back(&ss2Version);
 		item.emplace_back(&saveFilenameType);
 	}

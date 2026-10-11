@@ -190,6 +190,7 @@ void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	ss2fg_set_ram(svcsp_rom_ok() ? nullptr : MDFN_IEN_NGP::CPUExRAM);
 	ss2fg_set_fx(ss2FrameGenFx);                /* 이펙트·장풍 규칙(옮기기/섞기/끔) — 메뉴에서 바꾸면 거기서도 넘긴다 */
 	ss2fg_set_pose(ss2FrameGenPose);            /* 날아가는 몸 포즈 섞기(섞기/끔) */
+	ss2fg_set_idle(ss2FrameGenIdle);            /* 서기 자세 ¼픽셀 사이 그림(그리기/끔) */
 	svcsp_set_engine(1);                        /* SVC 롬이면 모던 조작 — 끄기는 「원버튼 필살기」 옵션 공용 */
 	ss2comm_overlay_spmode(svcsp_rom_ok());     /* 오버레이 SP 페이지가 svcsp 표를 쓴다 */
 	MDFN_IEN_NGP::SetPixelFormat(toMDFNSurface(mSurfacePix).format);
@@ -348,6 +349,7 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	ss2comm_draw_enable(ss2BandOn() ? 4 : 0);
 	ss2SyncSurface();
 	ss2FgNextOk = false;                 /* 새 실제 프레임 — 지난 4배 그림은 버린다 */
+	ss2IdleSlot = -1;                    /* 서기 조각 — 이번 출력이 쓸 칸은 ss2Predict4 가 정한다 */
 	ss2FgCommitPending = false;
 	ss2FrameNo++;
 	EmuEx::runFrame(*this, mdfnGameInfo, taskCtx, video, mSurfacePix, audio, maxAudioFrames);
@@ -370,7 +372,7 @@ void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 		else if(ra)
 			ss2RaPlain(ra);
 		if(video)
-			video->startFrameWithFormat(taskCtx, ss2CommitPix());
+			video->startFrameWithFormat(taskCtx, ss2IdleOut(ss2CommitPix(), ss2IdleSlot));
 	}
 	/* ── SS2 캐릭터 해설 ────────────────────────────────────────
 	   프레임을 돌린 뒤 램을 읽어 이벤트를 잡는다(브라우저판·코어판과 같은 엔진).
@@ -577,6 +579,13 @@ bool NgpSystem::ss2Predict4(int ra)
 		return false;
 	}
 	int m01 = ss2fg_motion(f0, f1), m12 = ss2fg_motion(f1, f2);
+	int id0 = 0, id1 = 0;
+	if(ss2FrameGenIdle && !svcsp_rom_ok())
+	{	/* 서기 사이 그림(코어 패치 95): 보여 줄 D 를 관찰(포즈 기억·제자리 바뀜 배우기)하고 τD·τD+½ 의 사이 그림을 계획(미리 돌린 D+1·D+2 로 확인) */
+		ss2fg_idle_observe(f0, ss2FgRealN);
+		id0 = ss2fg_idle_plan(f0, f1, f2, ss2FgRealN, 0, 0);
+		id1 = ss2FgNoNext ? 0 : ss2fg_idle_plan(f0, f1, f2, ss2FgRealN, 1, 1);
+	}
 	auto tpos = [](int K, int L, int h){ return (!K || K <= L) ? 0 : (256 * (h - 2 * L)) / (2 * (K - L)); };
 	int Ks = (m01 & 1) ? 1 : (m12 & 1) ? 2 : 0, rel = (int)ss2FgLastSpr - (int)ss2FgRealN;
 	int Ls = Ks ? std::max(rel, Ks - 2) : 0;
@@ -630,14 +639,18 @@ bool NgpSystem::ss2Predict4(int ra)
 		for(int y = 0; y < ss2GameH; y++)
 			memcpy(ss2FgNext.data() + y * pitchB, mSurfacePix.data() + y * pitchB, ss2GameW * bpp);
 		for(int p = 0; p < 2; p++) if(ov[p]) ss2fg_body_override(p, 1, ovx1[p], ovy1[p]);
-		if(ts1 || tb1 || ov[0] || ov[1])
+		ss2fg_idle_slot(id1 ? 1 : -1);   /* 서기 조각은 render2 끝에서 이 칸에 만들어진다 */
+		if(ts1 || tb1 || ov[0] || ov[1] || id1)
 			ss2fg_render2(f0, tos, ts1, tob, tb1, ss2FgNext.data(), pitchPx, bpp, cmap);
 	}
 	/* τ=N — 둘 다 0 이면 실제 N 그대로(표면에 이미 있다). 합성 실패면 render2 가 아무것도 안 쓴다 */
 	for(int p = 0; p < 2; p++) if(ov[p]) ss2fg_body_override(p, 1, ovx0[p], ovy0[p]);
-	if(ts0 || tb0 || ov[0] || ov[1])
+	ss2fg_idle_slot(id0 ? 0 : -1);
+	if(ts0 || tb0 || ov[0] || ov[1] || id0)
 		ss2fg_render2(f0, tos, ts0, tob, tb0, mSurfacePix.data(), pitchPx, bpp, cmap);
+	ss2fg_idle_slot(-1);
 	ss2fg_body_override(0, 0, 0, 0); ss2fg_body_override(1, 0, 0, 0);
+	ss2IdleSlot = 0;                     /* 이번 실제 출력은 τD(조각 칸 0) */
 	ss2FgNextOk = !ss2FgNoNext;
 	ss2SnapLoad(ra + 2 + extra);         /* 숨은 프레임 캡처를 무른다 */
 	return true;
@@ -649,6 +662,7 @@ bool NgpSystem::interFrame(EmuSystemTaskContext taskCtx, EmuVideo &video)
 	if(ss2FrameGen != 1 || !hasContent() || !ss2fg_cur() || ss2comm_overlay_active())
 		return false;                    /* 「60Hz 사이 그림만」은 빈 슬롯을 채우지 않는다(120 출력 안 함) */
 	ss2FgLastInter = ss2FrameNo;         /* 빈 슬롯이 오고 있다 — 4배·런어헤드 판정용 */
+	int idleSlot = -1;
 	if(ss2FgNextOk)
 	{	/* 4배: 실제 호출 때 미리 만들어 둔 반 프레임 뒤 그림 */
 		auto bpp = mSurfacePix.format().bytesPerPixel();
@@ -656,6 +670,7 @@ bool NgpSystem::interFrame(EmuSystemTaskContext taskCtx, EmuVideo &video)
 		for(int y = 0; y < ss2GameH; y++)
 			memcpy(mSurfacePix.data() + y * pitchB, ss2FgNext.data() + y * pitchB, ss2GameW * bpp);
 		ss2FgNextOk = false;
+		idleSlot = 1;                    /* 서기 조각 칸 τD+½ */
 	}
 	else
 	{	/* 2배(또는 4배가 못 만든 프레임): 합성이 안 되면(표시 중 VRAM 쓰기·흑백 모드) 실제 프레임을 그대로 한 번 더 올린다 */
@@ -664,8 +679,28 @@ bool NgpSystem::interFrame(EmuSystemTaskContext taskCtx, EmuVideo &video)
 	ss2comm_draw_hold(1);                /* 띠·토스트는 다시 그리되 수명은 실제 프레임에서만 줄인다 */
 	auto pix = ss2CommitPix();
 	ss2comm_draw_hold(0);
-	video.startFrameWithFormat(taskCtx, pix);
+	video.startFrameWithFormat(taskCtx, ss2IdleOut(pix, idleSlot));
 	return true;
+}
+
+/* 서기 사이 그림(코어 패치 95) — 사무쇼2·프레임 생성 켬·띠와 기둥 없음일 때 게임 화면을 4배(640×608)로 올린다.
+   크기를 들쭉날쭉 바꾸지 않도록 조각이 없는 프레임도 4배(단순 확대)로 — 그래서 모든 커밋 자리(실제·빈 슬롯·미루지 않은 커밋)가 이 길을 지난다. */
+bool NgpSystem::ss2IdleActive() const
+{
+	return ss2FrameGenIdle && ss2FrameGen != 0 && hasContent() && !svcsp_rom_ok() && !ss2BandOn() && !ss2SidesOn();
+}
+
+IG::PixmapView NgpSystem::ss2IdleOut(IG::MutablePixmapView pix, int slot)
+{
+	if(!ss2IdleActive() || pix.w() != ss2GameW || pix.h() != ss2GameH)
+		return pix;
+	auto bpp = pix.format().bytesPerPixel();
+	size_t need = (size_t)ss2GameW * 4 * ss2GameH * 4 * bpp;
+	if(ss2Idle4.size() < need)
+		ss2Idle4.resize(need);
+	ss2fg_idle_compose(ss2Idle4.data(), ss2GameW * 4, pix.data(), pix.pitchPx(), ss2GameW, ss2GameH, (int)bpp,
+		MDFN_IEN_NGP::NGPGfx->colorMap(), slot);
+	return IG::PixmapView{{{ss2GameW * 4, ss2GameH * 4}, pix.format()}, ss2Idle4.data()};
 }
 
 }
@@ -681,7 +716,7 @@ void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 		sys.ss2FgCommitPending = true;
 		return;
 	}
-	espec->video->startFrameWithFormat(espec->taskCtx, sys.ss2CommitPix());
+	espec->video->startFrameWithFormat(espec->taskCtx, sys.ss2IdleOut(sys.ss2CommitPix(), -1));
 }
 
 }

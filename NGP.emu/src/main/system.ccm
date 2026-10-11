@@ -85,7 +85,7 @@ enum NgpConfigKey
 	CFGKEY_SS2COMM_VIBRATE = 277, CFGKEY_SS2COMM_REF = 278, CFGKEY_SS2COMM_SIDES = 279,
 	CFGKEY_SS2COMM_SCENECAP = 280, CFGKEY_SS2COMM_SIDEBG = 281,
 	CFGKEY_SS2_FRAMEGEN = 282, CFGKEY_SS2_FRAMEGEN_MULT = 283, CFGKEY_SS2_RUNAHEAD = 284,
-	CFGKEY_SS2_FRAMEGEN_FX = 285, CFGKEY_SS2_FRAMEGEN_POSE = 286,
+	CFGKEY_SS2_FRAMEGEN_FX = 285, CFGKEY_SS2_FRAMEGEN_POSE = 286, CFGKEY_SS2_FRAMEGEN_IDLE = 287,
 };
 
 export class NgpSystem final: public EmuSystem
@@ -188,6 +188,13 @@ public:
 	uint8_t ss2FrameGenFx{1};
 	/* 날아가는 몸 포즈 — 맞고 빙글빙글 날아갈 때 번갈아 바뀌는 몸 포즈를 중간 그림에서 반투명으로 이음. 1 섞기(기본) · 0 끔. 코어판 ngp_framegen_pose */
 	uint8_t ss2FrameGenPose{1};
+	/* 서기 자세 — 서 있을 때 숨 쉬듯 1~2픽셀씩 바뀌는 포즈(6~8장 순환) 사이를 4배 격자에 ¼픽셀씩 옮겨 그려 잇는다(코어판 ngp_framegen_idle, 패치 95).
+	   켜면 사무쇼2 게임 화면(띠·기둥 없을 때)을 640×608 로 올린다 — 조각 밖은 단순 4배라 보기엔 같다. 1 그리기(기본) · 0 끔 */
+	uint8_t ss2FrameGenIdle{1};
+	int ss2IdleSlot{-1};                /* 이번 출력이 쓸 서기 조각 칸: 0 τD(실제 프레임) · 1 τD+½(빈 슬롯) · -1 없음 */
+	std::vector<uint8_t> ss2Idle4;      /* 4배 출력 버퍼(화면 형식 그대로) */
+	bool ss2IdleActive() const;         /* 서기 그리기가 지금 4배로 내보내는 중인가(사무쇼2·프레임 생성 켬·띠·기둥 없음) */
+	PixmapView ss2IdleOut(MutablePixmapView pix, int slot);   /* pix 가 게임 화면(160×152)이면 4배로 늘려 조각을 붙인 그림, 아니면 pix 그대로 */
 	int ss2RaFrames() const;            /* 지금 쓸 런어헤드 프레임 수(0 = 안 씀) */
 	bool ss2RaPlain(int ra);            /* 프레임 생성 없이 런어헤드만 — 표면에 N+ra 그림 */
 	bool ss2Hidden(int n, int keep);    /* 입력을 붙잡은 채 n 프레임 숨겨 돌린다, keep 번째 그림은 표면에 남긴다 */
